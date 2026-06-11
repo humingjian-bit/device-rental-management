@@ -1,0 +1,34 @@
+app:
+  app_id: "cli_a90ec606a4b85bd3"
+  # app_secret 从环境变量读取
+
+stores:
+  - id: "nantong"
+    name: "指向-南通"
+    base_token: "IUaybahQAal7fAsCQzVc2nJDnmh"
+    tables:
+      device: "tblVxflMiJ59wI51"
+      inventory: "tbl5PockypnrZmJw"
+      order: "tbllVh1wZWnzq7Uw"
+      repair: "tblbWVjbeXtJiNAp"
+    default_warehouse: "南通仓"
+    platforms:
+      - name: "优品租"
+        parser: "youpinzu"
+      - name: "惠租"
+        parser: "huizu"
+      - name: "人人租"
+        parser: "renrenzu"
+      - name: "诚赁"
+        parser: "chenglin"
+
+roles:
+  admin:
+    - manage_permissions
+    - all_operations
+  operator:
+    - view_all
+    - edit_device
+    - edit_inventory
+    - edit_order
+    - edit_repair
