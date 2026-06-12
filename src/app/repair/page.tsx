@@ -8,22 +8,22 @@ import { useCurrentStore } from "@/hooks/useStore";
 
 const TABLE_NAME = "repair";
 
+// P0-004修复：修正字段名，删除不存在的列（维修状态）
 // 维修管理表列定义
 const repairColumns: ColumnDef[] = [
   { field: "SN编码", headerName: "SN编码", width: 150, editable: false },
-  { field: "设备型号", headerName: "设备型号", width: 150, editable: false },
-  { field: "维修原因", headerName: "维修原因", width: 200 },
-  { field: "维修状态", headerName: "维修状态", width: 120, type: "select" },
-  { field: "维修费用", headerName: "维修费用", width: 100, type: "number" },
+  { field: "型号", headerName: "设备型号", width: 150, editable: false },
+  { field: "故障描述", headerName: "维修原因", width: 200 },
+  { field: "维修价格", headerName: "维修费用", width: 100, type: "number" },
   { field: "送修日期", headerName: "送修日期", width: 120, type: "date" },
-  { field: "预计归还", headerName: "预计归还", width: 120, type: "date" },
+  { field: "维修返日期", headerName: "预计归还", width: 120, type: "date" },
   { field: "备注", headerName: "备注", width: 200 },
 ];
 
 export default function RepairPage() {
   const { storeId } = useCurrentStore();
   const [pageToken, setPageToken] = useState<string | undefined>(undefined);
-  const { items, total, has_more, isLoading, error, mutate } = useTableData(
+  const { items, total, has_more, isLoading, error, mutate, page_token } = useTableData(
     storeId,
     TABLE_NAME,
     { page_size: 20, page_token: pageToken }
@@ -84,11 +84,13 @@ export default function RepairPage() {
         isLoading={isLoading}
         error={error}
         hasMore={has_more}
-        onPageChange={() => setPageToken(undefined)}
+        onPageChange={() => setPageToken(page_token)}
         onRefresh={() => mutate()}
         onCreate={handleCreate}
         onUpdate={handleUpdate}
         emptyDisplay="-"
+        // P1-006修复：传递字段定义用于映射 formula/lookup 选项ID
+        fieldDefs={fields}
       />
     </Box>
   );

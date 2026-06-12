@@ -8,13 +8,13 @@ import { useCurrentStore } from "@/hooks/useStore";
 
 const TABLE_NAME = "inventory";
 
+// P0-003修复：删除不存在的列（所在仓库、更新时间），修正库存状态为状态
 // 库存状态表列定义
 const inventoryColumns: ColumnDef[] = [
   { field: "SN编码", headerName: "SN编码", width: 150, editable: false },
   { field: "设备型号", headerName: "设备型号", width: 150, editable: false },
-  { field: "库存状态", headerName: "库存状态", width: 150, type: "select" },
-  { field: "所在仓库", headerName: "所在仓库", width: 120, type: "select" },
-  { field: "更新时间", headerName: "更新时间", width: 150, editable: false },
+  { field: "分类", headerName: "分类", width: 120, editable: false },
+  { field: "状态", headerName: "库存状态", width: 150, type: "select" },
 ];
 
 // 库存状态编辑时可选项（过滤掉不相关选项）
@@ -30,7 +30,7 @@ const INVENTORY_EDITABLE_OPTIONS = [
 export default function InventoryPage() {
   const { storeId } = useCurrentStore();
   const [pageToken, setPageToken] = useState<string | undefined>(undefined);
-  const { items, total, has_more, isLoading, error, mutate } = useTableData(
+  const { items, total, has_more, isLoading, error, mutate, page_token } = useTableData(
     storeId,
     TABLE_NAME,
     { page_size: 20, page_token: pageToken }
@@ -39,7 +39,8 @@ export default function InventoryPage() {
   const { fields } = useTableFields(storeId, TABLE_NAME);
 
   const columnsWithOptions = inventoryColumns.map((col) => {
-    if (col.field === "库存状态") {
+    // P0-003修复：库存状态字段名改为"状态"
+    if (col.field === "状态") {
       const fieldDef = fields.find((f) => f.field_name === col.field);
       const allOptions = fieldDef?.property?.options?.map((opt) => ({
         label: opt.name,
@@ -67,9 +68,9 @@ export default function InventoryPage() {
 
   const handleUpdate = useCallback(
     async (recordId: string, fields: Record<string, unknown>) => {
-      // 库存状态是 multiple select，前端按单选处理：替换而非追加
-      if (fields["库存状态"] && typeof fields["库存状态"] === "string") {
-        fields["库存状态"] = [fields["库存状态"]];
+      // P0-003修复：库存状态改为状态，是 multiple select，前端按单选处理：替换而非追加
+      if (fields["状态"] && typeof fields["状态"] === "string") {
+        fields["状态"] = [fields["状态"]];
       }
       const res = await fetch(`/api/base/${storeId}/${TABLE_NAME}`, {
         method: "PUT",
@@ -94,10 +95,12 @@ export default function InventoryPage() {
         isLoading={isLoading}
         error={error}
         hasMore={has_more}
-        onPageChange={() => setPageToken(undefined)}
+        onPageChange={() => setPageToken(page_token)}
         onRefresh={() => mutate()}
         onUpdate={handleUpdate}
         emptyDisplay="-"
+        // P1-006修复：传递字段定义用于映射 formula/lookup 选项ID
+        fieldDefs={fields}
       />
     </Box>
   );

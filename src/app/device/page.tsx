@@ -9,22 +9,24 @@ import { useCurrentStore } from "@/hooks/useStore";
 const TABLE_NAME = "device";
 
 // 设备信息表列定义（映射飞书多维表字段）
+// P0-001修复：删除不存在的字段（品牌、押金、日租金），修正字段名，补充有用字段
 const deviceColumns: ColumnDef[] = [
   { field: "SN编码", headerName: "SN编码", width: 150, editable: false },
   { field: "设备型号", headerName: "设备型号", width: 150 },
   { field: "分类", headerName: "分类", width: 120, type: "select" },
-  { field: "品牌", headerName: "品牌", width: 100 },
-  { field: "购入日期", headerName: "购入日期", width: 120, type: "date" },
-  { field: "购入价格", headerName: "购入价格", width: 100, type: "number" },
-  { field: "押金", headerName: "押金", width: 100, type: "number" },
-  { field: "日租金", headerName: "日租金", width: 100, type: "number" },
+  { field: "采购日期", headerName: "采购日期", width: 120, type: "date" },
+  { field: "采购价格", headerName: "采购价格", width: 100, type: "number" },
+  { field: "颜色", headerName: "颜色", width: 80, type: "select" },
+  { field: "采购商", headerName: "采购商", width: 120, type: "select" },
+  { field: "归属", headerName: "归属", width: 120, type: "select" },
+  { field: "发票", headerName: "发票", width: 100, type: "select" },
   { field: "备注", headerName: "备注", width: 200 },
 ];
 
 export default function DevicePage() {
   const { storeId } = useCurrentStore();
   const [pageToken, setPageToken] = useState<string | undefined>(undefined);
-  const { items, total, has_more, isLoading, error, mutate } = useTableData(
+  const { items, total, has_more, isLoading, error, mutate, page_token } = useTableData(
     storeId,
     TABLE_NAME,
     { page_size: 20, page_token: pageToken }
@@ -85,11 +87,13 @@ export default function DevicePage() {
         isLoading={isLoading || fieldsLoading}
         error={error}
         hasMore={has_more}
-        onPageChange={() => setPageToken(undefined)}
+        onPageChange={() => setPageToken(page_token)}
         onRefresh={() => mutate()}
         onCreate={handleCreate}
         onUpdate={handleUpdate}
         emptyDisplay="-"
+        // P1-006修复：传递字段定义用于映射 formula/lookup 选项ID
+        fieldDefs={fields}
       />
     </Box>
   );

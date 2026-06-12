@@ -13,6 +13,10 @@ import { listBitableRecords, updateBitableRecord } from "@/lib/feishu";
  *   sn_code: string,          // SN编码，用于查找对应库存记录
  *   return_warehouse?: string // 归还仓库（订单归还时使用）
  * }
+ * 
+ * P0-005修复：字段名改为与飞书表一致
+ * - 订单状态: new_status → 状态: new_status
+ * - 库存状态: [inventoryStatus] → 状态: [inventoryStatus]
  */
 export async function POST(request: NextRequest) {
   const body = await request.json();
@@ -31,8 +35,9 @@ export async function POST(request: NextRequest) {
   }
 
   // 1. 更新订单状态
+  // P0-005修复：字段名从"订单状态"改为"状态"
   const orderFields: Record<string, unknown> = {
-    订单状态: new_status || null, // 空值 = 进行中
+    状态: new_status || null, // 空值 = 进行中
   };
 
   try {
@@ -59,9 +64,10 @@ export async function POST(request: NextRequest) {
         const inventoryRecord = inventoryRecords.items[0];
         const inventoryRecordId = String(inventoryRecord._record_id);
 
-        // 库存状态是 multiple select，前端按单选处理：替换
+        // P0-005修复：库存状态字段名从"库存状态"改为"状态"
+        // 状态是 multiple select，前端按单选处理：替换
         await updateBitableRecord(store.base_token, store.tables.inventory, inventoryRecordId, {
-          库存状态: [inventoryStatus],
+          状态: [inventoryStatus],
         });
       }
     }
