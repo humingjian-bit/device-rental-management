@@ -1,30 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// ACCESS_SALT 从环境变量获取
+// ACCESS_SALT 从环境变量获取（用于URL参数token验证）
 const ACCESS_SALT = process.env.ACCESS_SALT || "";
 
 /**
- * 生成当日有效的访问Token
- * k = Base64(SHA256("设备租赁" + 日期 + ACCESS_SALT).toString().substring(0,16))
+ * 生成当日有效的访问Token（通过URL参数k传递）
+ * 用于外部链接临时访问
  */
 function generateDailyToken(): string {
   const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
   const input = `设备租赁${today}${ACCESS_SALT}`;
   
-  // 使用 SubtleCrypto 计算 SHA256
-  const encoder = new TextEncoder();
-  const data = encoder.encode(input);
-  
-  // 同步计算 hash
+  // 简化的 hash 实现（用于 Edge Runtime）
   let hash = 0;
   for (let i = 0; i < input.length; i++) {
     const char = input.charCodeAt(i);
     hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; // Convert to 32bit integer
+    hash = hash & hash;
   }
   
-  // 简化的 hash 实现（用于 Edge Runtime）
-  // 实际使用中建议确保 server 端和这里一致
   const hashStr = Math.abs(hash).toString(16).padStart(8, '0').slice(0, 16);
   const combined = hashStr + today.replace(/-/g, '');
   
@@ -44,7 +38,7 @@ function generateDailyToken(): string {
 }
 
 /**
- * 验证Token是否有效
+ * 验证URL参数Token是否有效
  */
 function validateToken(token: string): boolean {
   const expectedToken = generateDailyToken();
@@ -64,26 +58,28 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // 2. 登录页直接放行
-  if (pathname.startsWith("/login")) {
+  // 2. 登录页和OAuth回调直接放行
+  if (
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/api/auth/")
+  ) {
     return NextResponse.next();
   }
 
-  // 3. API 路由也受保护（除非是公共API）
+  // 3. API 路由也受保护
   const isApiRoute = pathname.startsWith("/api/");
-  
-  // 4. 检查 cookie 中是否有有效 token
-  const tokenFromCookie = request.cookies.get("access_token")?.value;
-  
-  if (tokenFromCookie && validateToken(tokenFromCookie)) {
+
+  // 4. 检查是否已通过飞书登录（feishu_user cookie）
+  const feishuUser = request.cookies.get("feishu_user")?.value;
+  if (feishuUser) {
     return NextResponse.next();
   }
 
-  // 5. 检查 URL 参数中的 token
+  // 5. 检查 URL 参数中的 token（用于临时访问链接）
   const tokenFromUrl = request.nextUrl.searchParams.get("k");
   
   if (tokenFromUrl && validateToken(tokenFromUrl)) {
-    // Token 有效，写入 cookie（有效期当天）
+    // Token 有效，写入临时 cookie（当天有效）
     const response = NextResponse.next();
     const today = new Date();
     const tomorrow = new Date(today);
@@ -103,13 +99,13 @@ export function middleware(request: NextRequest) {
   // 6. 无效或缺失 token，返回 403
   if (isApiRoute) {
     return NextResponse.json(
-      { error: "Unauthorized", message: "Invalid or missing access token" },
+      { error: "Unauthorized", message: "请先登录或使用有效的访问链接" },
       { status: 403 }
     );
   }
 
   return NextResponse.json(
-    { error: "Forbidden", message: "请通过正确渠道获取访问链接" },
+    { error: "Forbidden", message: "请先登录或使用有效的访问链接" },
     { status: 403 }
   );
 }
