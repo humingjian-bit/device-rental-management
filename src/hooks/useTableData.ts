@@ -28,13 +28,27 @@ export function useTableData(
     page_token?: string;
     filter?: string;
     sort?: string;
+    search?: string;  // Phase 3: 服务端搜索关键词
   }
 ): TableDataResult {
+  // storeId为空时返回默认状态
+  if (!storeId) {
+    return {
+      items: [],
+      total: 0,
+      has_more: false,
+      isLoading: false,
+      error: null,
+      mutate: () => {},
+    };
+  }
+
   const searchParams = new URLSearchParams();
   if (params?.page_size) searchParams.set("page_size", String(params.page_size));
   if (params?.page_token) searchParams.set("page_token", params.page_token);
   if (params?.filter) searchParams.set("filter", params.filter);
   if (params?.sort) searchParams.set("sort", params.sort);
+  if (params?.search) searchParams.set("search", params.search);
 
   const url = `/api/base/${storeId}/${tableName}${searchParams.toString() ? "?" + searchParams.toString() : ""}`;
 
@@ -77,7 +91,7 @@ export function useTableFields(
 
   const { data, error, isLoading } = useSWR(url, fetcher, {
     revalidateOnFocus: false,
-    dedupingInterval: 60000, // 字段定义不常变，缓存1分钟
+    dedupingInterval: 60000,
   });
 
   return {

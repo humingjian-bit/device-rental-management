@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   Box,
   Table,
@@ -25,11 +25,18 @@ import {
   InputLabel,
   Select,
   SelectChangeEvent,
+  InputAdornment,
 } from "@mui/material";
 import {
   Edit as EditIcon,
   Add as AddIcon,
   Refresh as RefreshIcon,
+  Search as SearchIcon,
+  Clear as ClearIcon,
+  FirstPage as FirstPageIcon,
+  LastPage as LastPageIcon,
+  NavigateBefore as PrevIcon,
+  NavigateNext as NextIcon,
 } from "@mui/icons-material";
 
 export interface FieldDef {
@@ -65,31 +72,30 @@ interface DataTableProps {
   onUpdate?: (recordId: string, fields: Record<string, unknown>, currentRow?: Record<string, unknown>) => Promise<void>;
   pageSize?: number;
   emptyDisplay?: string;
-  fieldDefs?: FieldDef[]; // P1-006: 用于映射 formula/lookup 字段的选项ID
+  fieldDefs?: FieldDef[];
+  extraOptions?: { id: string; name: string }[];
+  // Phase 3: 搜索功能
+  searchValue?: string;
+  onSearchChange?: (value: string) => void;
 }
 
-/**
- * P1-005修复：日期时间戳格式化
- * 格式化为 YYYY-MM-DD
- */
 function formatDate(value: unknown): string | null {
   if (value === null || value === undefined) return null;
   
-  // 数字类型：毫秒级时间戳（> 1000000000000）
-  if (typeof value === "number" && value > 1000000000000) {
-    const date = new Date(value);
-    if (!isNaN(date.getTime())) {
-      return date.toISOString().slice(0, 10);
-    }
-  }
-  
-  // 字符串类型：尝试解析日期格式
   if (typeof value === "string") {
-    // 已经是 YYYY-MM-DD 格式
     if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
       return value;
     }
-    // ISO 格式
+    if (value.includes("T") || /^\d{4}-\d{2}-\d{2}/.test(value)) {
+      const date = new Date(value);
+      if (!isNaN(date.getTime())) {
+        return date.toISOString().slice(0, 10);
+      }
+    }
+    return null;
+  }
+  
+  if (typeof value === "number" && value > 1000000000000) {
     const date = new Date(value);
     if (!isNaN(date.getTime())) {
       return date.toISOString().slice(0, 10);
@@ -99,58 +105,95 @@ function formatDate(value: unknown): string | null {
   return null;
 }
 
-/**
- * P1-006修复：映射选项ID为选项名称
- * 用于 formula(type=19) 和 lookup(type=18) 字段
- */
-function mapOptionIdsToNames(value: unknown, fieldDef?: FieldDef): string {
-  if (!fieldDef || !fieldDef.property?.options) {
+function mapOptionIdsToNames(value: unknown, fieldDef?: FieldDef, allFieldDefs?: FieldDef[], extraOptions?: { id: string; name: string }[]): string {
+  if (!fieldDef) {
+    if (typeof value === "string" && value.startsWith("opt") && allFieldDefs) {
+      for (const fd of allFieldDefs) {
+        if (fd.property?.options) {
+          const option = fd.property.options.find((opt) => opt.id === value);
+          if (option) return option.name;
+        }
+      }
+    }
     return String(value);
   }
 
-  const options = fieldDef.property.options;
+  const options = fieldDef.property?.options;
+  if (!options) {
+    if (allFieldDefs) {
+      for (const fd of allFieldDefs) {
+        if (fd.property?.options) {
+          const option = fd.property.options.find((opt) => opt.id === value);
+          if (option) return option.name;
+        }
+      }
+    }
+    if (extraOptions) {
+      const opt = extraOptions.find((o) => o.id === value);
+      if (opt) return opt.name;
+    }
+    return String(value);
+  }
   
-  // 如果是数组（如 formula 返回的选项ID数组）
   if (Array.isArray(value)) {
     const names: string[] = [];
     for (const item of value) {
       if (typeof item === "string" && item.startsWith("opt")) {
-        // 查找对应的选项名称
         const option = options.find((opt) => opt.id === item);
         if (option) {
           names.push(option.name);
+        } else if (allFieldDefs) {
+          for (const fd of allFieldDefs) {
+            if (fd.property?.options) {
+              const opt = fd.property.options.find((o) => o.id === item);
+              if (opt) {
+                names.push(opt.name);
+                break;
+              }
+            }
+          }
+        }
+        if (!names.some(n => n.startsWith('opt')) && extraOptions) {
+          const opt = extraOptions.find((o) => o.id === item);
+          if (opt) names.push(opt.name);
         }
       } else if (typeof item === "object" && item !== null && "text" in item) {
-        // lookup 类型：{text: "xxx", record_ids: [...]}
         names.push(String((item as { text: string }).text));
       } else {
         names.push(String(item));
       }
     }
-    return names.join(", ");
+    return names.length > 0 ? names.join(", ") : String(value);
   }
   
-  // 如果是单个字符串选项ID
   if (typeof value === "string" && value.startsWith("opt")) {
     const option = options.find((opt) => opt.id === value);
-    return option ? option.name : value;
+    if (option) return option.name;
+    if (allFieldDefs) {
+      for (const fd of allFieldDefs) {
+        if (fd.property?.options) {
+          const opt = fd.property.options.find((o) => o.id === value);
+          if (opt) return opt.name;
+        }
+      }
+    }
+    if (extraOptions) {
+      const opt = extraOptions.find((o) => o.id === value);
+      if (opt) return opt.name;
+    }
+    return value;
   }
   
   return String(value);
 }
 
-/**
- * 空值显示映射
- */
-function displayValue(value: unknown, emptyDisplay = "-", fieldDef?: FieldDef): string {
+function displayValue(value: unknown, emptyDisplay = "-", fieldDef?: FieldDef, allFieldDefs?: FieldDef[], extraOptions?: { id: string; name: string }[]): string {
   if (value === null || value === undefined || value === "") return emptyDisplay;
   
-  // P1-005修复：日期格式化
   const formattedDate = formatDate(value);
   if (formattedDate) return formattedDate;
   
   if (Array.isArray(value)) {
-    // P1-006修复：处理 lookup 类型 [{text: "xxx", record_ids: [...]}]
     if (value.length > 0 && typeof value[0] === "object" && "text" in (value[0] as object)) {
       const texts = value.map((item) => {
         if (typeof item === "object" && item !== null && "text" in item) {
@@ -160,9 +203,8 @@ function displayValue(value: unknown, emptyDisplay = "-", fieldDef?: FieldDef): 
       });
       return texts.join(", ");
     }
-    // P1-006修复：处理公式/选项ID数组
     if (value.length > 0 && typeof value[0] === "string" && (value[0] as string).startsWith("opt")) {
-      return mapOptionIdsToNames(value, fieldDef);
+      return mapOptionIdsToNames(value, fieldDef, allFieldDefs, extraOptions);
     }
     return value.length > 0 ? value.join(", ") : emptyDisplay;
   }
@@ -177,9 +219,6 @@ function displayValue(value: unknown, emptyDisplay = "-", fieldDef?: FieldDef): 
   return String(value);
 }
 
-/**
- * 从飞书字段值提取原始值用于编辑
- */
 function extractEditValue(value: unknown): unknown {
   if (value === null || value === undefined) return "";
   if (typeof value === "object" && !Array.isArray(value)) {
@@ -205,15 +244,83 @@ export default function DataTable({
   pageSize = 20,
   emptyDisplay = "-",
   fieldDefs = [],
+  extraOptions = [],
+  searchValue = "",
+  onSearchChange,
 }: DataTableProps) {
-  const [searchText, setSearchText] = useState("");
+  const [searchText, setSearchText] = useState(searchValue);
+  const [pageTokens, setPageTokens] = useState<string[]>([]);
+  const [currentPage, setCurrentPage] = useState(0);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editRecord, setEditRecord] = useState<Record<string, unknown> | null>(null);
   const [editFields, setEditFields] = useState<Record<string, unknown>>({});
   const [isCreate, setIsCreate] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const filteredRows = searchText
+  // 同步外部searchValue
+  useEffect(() => {
+    setSearchText(searchValue);
+  }, [searchValue]);
+
+  // 当pageToken变化时（重新加载），重置分页状态
+  useEffect(() => {
+    if (!isLoading && rows.length > 0) {
+      // 成功加载了新数据
+    }
+  }, [isLoading, rows.length]);
+
+  const handleSearch = () => {
+    if (onSearchChange) {
+      onSearchChange(searchText);
+    }
+    setCurrentPage(0);
+    setPageTokens([]);
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      handleSearch();
+    }
+  };
+
+  const handleClearSearch = () => {
+    setSearchText("");
+    if (onSearchChange) {
+      onSearchChange("");
+    }
+    setCurrentPage(0);
+    setPageTokens([]);
+  };
+
+  const handleFirstPage = () => {
+    setCurrentPage(0);
+    setPageTokens([]);
+    onPageChange(undefined);
+  };
+
+  const handlePrevPage = () => {
+    if (currentPage > 0) {
+      const newPage = currentPage - 1;
+      setCurrentPage(newPage);
+      onPageChange(pageTokens[newPage]);
+    }
+  };
+
+  const handleNextPage = () => {
+    if (hasMore) {
+      const newPage = currentPage + 1;
+      setCurrentPage(newPage);
+      // 保存当前页的token用于返回
+      if (pageTokens.length < newPage + 1) {
+        setPageTokens([...pageTokens, pageTokens[pageTokens.length - 1] || pageTokens[0] || ""]);
+      }
+      // 触发加载下一页
+      onPageChange(pageTokens[pageTokens.length - 1]);
+    }
+  };
+
+  // 过滤（仅前端本地搜索）
+  const filteredRows = searchText && !onSearchChange
     ? rows.filter((row) =>
         columns.some((col) => {
           const val = row[col.field];
@@ -256,7 +363,6 @@ export default function DataTable({
       } else if (editRecord && onUpdate) {
         const recordId = String(editRecord._record_id || "");
         if (recordId) {
-          // P0-002修复：传递当前行数据，用于 lookup 字段处理
           await onUpdate(recordId, editFields, editRecord);
         }
       }
@@ -278,6 +384,8 @@ export default function DataTable({
   };
 
   const colSpan = columns.length + (onUpdate ? 1 : 0);
+  const startItem = currentPage * pageSize + 1;
+  const endItem = Math.min(startItem + rows.length - 1, total);
 
   return (
     <Box>
@@ -285,10 +393,25 @@ export default function DataTable({
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
         <TextField
           size="small"
-          placeholder="搜索..."
+          placeholder="搜索（SN:xxx / 型号:xxx / 平台:xxx / 状态:xxx）"
           value={searchText}
           onChange={(e) => setSearchText(e.target.value)}
-          sx={{ width: 300 }}
+          onKeyPress={handleKeyPress}
+          sx={{ width: 400 }}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon />
+              </InputAdornment>
+            ),
+            endAdornment: searchText && (
+              <InputAdornment position="end">
+                <IconButton size="small" onClick={handleClearSearch}>
+                  <ClearIcon fontSize="small" />
+                </IconButton>
+              </InputAdornment>
+            ),
+          }}
         />
         <Box sx={{ display: "flex", gap: 1 }}>
           <IconButton onClick={onRefresh} title="刷新">
@@ -348,7 +471,6 @@ export default function DataTable({
               </TableRow>
             ) : (
               filteredRows.map((row, idx) => {
-                // P1-006修复：获取当前行数据的字段定义
                 const getFieldDef = (fieldName: string) => {
                   return fieldDefs.find((f) => f.field_name === fieldName);
                 };
@@ -363,12 +485,12 @@ export default function DataTable({
                             col.render(row[col.field], row)
                           ) : col.type === "select" && row[col.field] ? (
                             <Chip
-                              label={displayValue(row[col.field], emptyDisplay, fieldDef)}
+                              label={displayValue(row[col.field], emptyDisplay, fieldDef, fieldDefs, extraOptions)}
                               size="small"
                               variant="outlined"
                             />
                           ) : (
-                            displayValue(row[col.field], emptyDisplay, fieldDef)
+                            displayValue(row[col.field], emptyDisplay, fieldDef, fieldDefs, extraOptions)
                           )}
                         </TableCell>
                       );
@@ -388,14 +510,29 @@ export default function DataTable({
         </Table>
       </TableContainer>
 
-      {/* 分页 */}
-      {hasMore && (
-        <Box sx={{ display: "flex", justifyContent: "center", mt: 1 }}>
-          <Button size="small" onClick={() => onPageChange()}>
-            加载更多
-          </Button>
+      {/* Phase 3: 分页升级 - 总数 + 页码导航 */}
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mt: 2 }}>
+        <Typography variant="body2" color="text.secondary">
+          {total > 0 ? `第 ${startItem}-${endItem} 条，共 ${total} 条` : `共 ${total} 条`}
+        </Typography>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+          <IconButton size="small" onClick={handleFirstPage} disabled={currentPage === 0}>
+            <FirstPageIcon />
+          </IconButton>
+          <IconButton size="small" onClick={handlePrevPage} disabled={currentPage === 0}>
+            <PrevIcon />
+          </IconButton>
+          <Typography variant="body2" sx={{ mx: 1 }}>
+            第 {currentPage + 1} 页
+          </Typography>
+          <IconButton size="small" onClick={handleNextPage} disabled={!hasMore}>
+            <NextIcon />
+          </IconButton>
+          <IconButton size="small" disabled>
+            <LastPageIcon />
+          </IconButton>
         </Box>
-      )}
+      </Box>
 
       {/* 编辑/新增对话框 */}
       <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)} maxWidth="sm" fullWidth>

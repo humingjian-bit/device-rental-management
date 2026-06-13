@@ -23,19 +23,24 @@ const ORDER_TO_INVENTORY_MAP: Record<string, string> = {
 export default function OrderPage() {
   const { storeId } = useCurrentStore();
   const [pageToken, setPageToken] = useState<string | undefined>(undefined);
+  const [search, setSearch] = useState<string>("");
+  
   const { items, total, has_more, isLoading, error, mutate, page_token } = useTableData(
     storeId,
     TABLE_NAME,
-    { page_size: 20, page_token: pageToken }
+    { page_size: 20, page_token: pageToken, search }
   );
 
   const { fields } = useTableFields(storeId, TABLE_NAME);
 
-  // P0-002修复：修正字段名，SN编码是lookup类型需要特殊处理
+  // Phase 3: 补充8个字段 + 原有字段
   const orderColumns: ColumnDef[] = [
     { field: "订单号", headerName: "订单号", width: 150, editable: false },
+    { field: "姓名", headerName: "姓名", width: 100 },
+    { field: "手机号码", headerName: "手机", width: 120 },
     { field: "SN编码（最最重要）", headerName: "SN编码", width: 150, editable: false },
     { field: "租机型号", headerName: "设备型号", width: 150, editable: false },
+    { field: "套餐", headerName: "套餐", width: 100 },
     { field: "发货平台", headerName: "平台", width: 100, type: "select" },
     {
       field: "状态",
@@ -55,14 +60,18 @@ export default function OrderPage() {
         return <Chip label={text} size="small" color={color} variant="outlined" />;
       },
     },
-    { field: "发货日期", headerName: "租期开始", width: 120, type: "date" },
-    { field: "归还日期（预估）", headerName: "租期结束", width: 120, type: "date" },
-    { field: "租金", headerName: "日租金", width: 100, type: "number" },
+    { field: "租期（天）", headerName: "租期", width: 80, type: "number" },
+    { field: "租金", headerName: "租金", width: 100, type: "number" },
+    { field: "快递费", headerName: "快递费", width: 80, type: "number" },
+    { field: "安心保", headerName: "安心保", width: 80, type: "number" },
+    { field: "发货日期", headerName: "预计发货", width: 120, type: "date" },
+    { field: "实际发货日期", headerName: "实际发货", width: 120, type: "date" },
+    { field: "归还日期（预估）", headerName: "预计归还", width: 120, type: "date" },
+    { field: "实际入库日期", headerName: "实际入库", width: 120, type: "date" },
     { field: "备注", headerName: "备注", width: 200 },
   ];
 
   const columnsWithOptions = orderColumns.map((col) => {
-    // P0-002修复：订单状态字段名改为"状态"
     if (col.field === "状态") {
       const fieldDef = fields.find((f) => f.field_name === col.field);
       const allOptions = fieldDef?.property?.options?.map((opt) => ({
@@ -104,14 +113,10 @@ export default function OrderPage() {
 
   const handleUpdate = useCallback(
     async (recordId: string, fields: Record<string, unknown>, currentRow?: Record<string, unknown>) => {
-      // P0-002修复：字段名改为"状态"，SN编码改为"SN编码（最最重要）"
-      // 如果订单状态发生了变化，使用联动API
       const newStatus = String(fields["状态"] ?? "");
-      // SN编码是lookup类型，更新时从当前行数据中读取原始值
       const snCodeObj = currentRow ? currentRow["SN编码（最最重要）"] : fields["SN编码（最最重要）"];
       let snCode = "";
       if (Array.isArray(snCodeObj)) {
-        // lookup类型返回 [{text: "xxx", record_ids: [...]}]
         snCodeObj.forEach((item) => {
           if (item && typeof item === "object" && "text" in item) {
             snCode = String((item as { text: string }).text);
@@ -122,7 +127,6 @@ export default function OrderPage() {
       }
 
       if (newStatus !== "" && snCode && ORDER_TO_INVENTORY_MAP[newStatus] !== undefined) {
-        // 使用联动API
         const res = await fetch("/api/actions/order-status", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -135,7 +139,6 @@ export default function OrderPage() {
         });
         if (!res.ok) throw new Error("更新失败（联动）");
       } else {
-        // 普通更新
         if (fields["状态"] === "") {
           fields["状态"] = null;
         }
@@ -168,8 +171,10 @@ export default function OrderPage() {
         onCreate={handleCreate}
         onUpdate={handleUpdate}
         emptyDisplay={EMPTY_STATUS_DISPLAY}
-        // P1-006修复：传递字段定义用于映射 formula/lookup 选项ID
         fieldDefs={fields}
+        // Phase 3: 搜索功能
+        searchValue={search}
+        onSearchChange={setSearch}
       />
     </Box>
   );
