@@ -93,7 +93,7 @@ export default function SNSearch({
       onOpen={handleOpen}
       loading={loading}
       renderOption={(props, option) => {
-        const { key, ...rest } = props as Record<string, unknown>;
+        const { key: _key, ...rest } = props as React.HTMLAttributes<HTMLLIElement> & { key?: React.Key };
         return (
           <Box component="li" key={option.sn} {...rest} sx={{ display: "flex", gap: 1 }}>
             <Typography variant="body2" fontWeight="bold" sx={{ minWidth: 120 }}>
