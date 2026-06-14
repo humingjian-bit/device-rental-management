@@ -22,19 +22,8 @@ function generateDailyToken(): string {
   const hashStr = Math.abs(hash).toString(16).padStart(8, '0').slice(0, 16);
   const combined = hashStr + today.replace(/-/g, '');
   
-  // Base64 编码
-  let result = '';
-  for (let i = 0; i < combined.length; i += 3) {
-    const a = combined.charCodeAt(i);
-    const b = combined.charCodeAt(i + 1) || 0;
-    const c = combined.charCodeAt(i + 2) || 0;
-    result += String.fromCharCode(a >> 2);
-    result += String.fromCharCode(((a & 3) << 4) | (b >> 4));
-    result += i + 1 < combined.length ? String.fromCharCode(((b & 15) << 2) | (c >> 6)) : '=';
-    result += i + 2 < combined.length ? String.fromCharCode(c & 63) : '=';
-  }
-  
-  return result.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  // Base64 编码（标准 Node.js Buffer）
+  return Buffer.from(combined).toString("base64").replace(/\+/g, "-").replace(/\//g, "_");
 }
 
 /**
@@ -96,16 +85,17 @@ export function middleware(request: NextRequest) {
     return response;
   }
 
-  // 6. 无效或缺失 token，返回 403
+  // 6. 无效或缺失 token，返回 403（含调试信息）
+  const debugToken = generateDailyToken();
   if (isApiRoute) {
     return NextResponse.json(
-      { error: "Unauthorized", message: "请先登录或使用有效的访问链接" },
+      { error: "Unauthorized", message: "请先登录或使用有效的访问链接", debugToken },
       { status: 403 }
     );
   }
 
   return NextResponse.json(
-    { error: "Forbidden", message: "请先登录或使用有效的访问链接" },
+    { error: "Forbidden", message: "请先登录或使用有效的访问链接", debugToken },
     { status: 403 }
   );
 }
