@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 // ACCESS_SALT 从环境变量获取（用于URL参数token验证）
-const ACCESS_SALT = process.env.ACCESS_SALT || "";
+const ACCESS_SALT = process.env.ACCESS_SALT || "cLQJrhSuajJ3ibIu7PtaAbKUXYDv2sbQF5aepegDIzA=";
 
 /**
  * 生成当日有效的访问Token（通过URL参数k传递）
