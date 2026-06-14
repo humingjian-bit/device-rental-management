@@ -85,19 +85,17 @@ export function middleware(request: NextRequest) {
     return response;
   }
 
-  // 6. 无效或缺失 token，返回 403（含调试信息）
-  const debugToken = generateDailyToken();
+  // 6. API 无 token 返回 403；页面路由重定向到登录页
   if (isApiRoute) {
+    const debugToken = generateDailyToken();
     return NextResponse.json(
       { error: "Unauthorized", message: "请先登录或使用有效的访问链接", debugToken },
       { status: 403 }
     );
   }
 
-  return NextResponse.json(
-    { error: "Forbidden", message: "请先登录或使用有效的访问链接", debugToken },
-    { status: 403 }
-  );
+  // 页面路由 → 重定向到登录页
+  return NextResponse.redirect(new URL("/login", request.url));
 }
 
 export const config = {
