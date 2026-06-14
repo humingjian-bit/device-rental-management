@@ -19,46 +19,6 @@ interface FieldDef {
   };
 }
 
-/**
- * Phase 3: 解析搜索语法
- * 支持：
- * - SN:xxx 精确匹配SN编码
- * - 型号:xxx 精确匹配设备型号
- * - 平台:xxx 精确匹配发货平台
- * - 状态:xxx 精确匹配订单状态
- * - 无前缀：全字段模糊搜索（返回后端无法处理的说明）
- */
-function parseSearchQuery(search: string): { filters: string[]; isServerSide: boolean } {
-  if (!search.trim()) {
-    return { filters: [], isServerSide: false };
-  }
-
-  const filters: string[] = [];
-  const prefixes = ["SN:", "型号:", "平台:", "状态:"];
-  
-  for (const prefix of prefixes) {
-    if (search.startsWith(prefix)) {
-      const value = search.slice(prefix.length).trim();
-      if (value) {
-        // 构建立即数过滤条件
-        if (prefix === "SN:") {
-          filters.push(`CurrentValue.["SN编码（最最重要）"] = "${value}"`);
-        } else if (prefix === "型号:") {
-          filters.push(`CurrentValue.["租机型号"] = "${value}"`);
-        } else if (prefix === "平台:") {
-          filters.push(`CurrentValue.["发货平台"] = "${value}"`);
-        } else if (prefix === "状态:") {
-          filters.push(`CurrentValue.["状态"] = "${value}"`);
-        }
-      }
-      return { filters, isServerSide: true };
-    }
-  }
-
-  // 无前缀：全字段模糊搜索，需要前端处理
-  return { filters: [], isServerSide: false };
-}
-
 // GET /api/base/[store]/[table] — 查询记录列表或字段定义
 export async function GET(
   request: NextRequest,
@@ -109,26 +69,45 @@ export async function GET(
     }
   }
 
-  // Phase 3: 获取记录列表时支持搜索
+  // P1-RE-002-fix3 & P1-003: 获取记录列表时，同时获取关联表的options用于Lookup字段映射
   const pageSize = Number(searchParams.get("page_size")) || 20;
   const pageToken = searchParams.get("page_token") || undefined;
   const filter = searchParams.get("filter") || undefined;
   const sort = searchParams.get("sort") || undefined;
-  const search = searchParams.get("search") || undefined;
+  
+  // 全局搜索支持
+  const searchKeyword = searchParams.get("search") || undefined;
+  const searchFieldsParam = searchParams.get("searchFields");
+  const searchFields = searchFieldsParam ? searchFieldsParam.split(",") : ["SN编码", "设备型号", "备注"];
 
-  // Phase 3: 解析搜索语法，构建设件filter
+  // 获取字段定义
+  const fields = await listBitableFields(store.base_token, tableId) as FieldDef[];
+  const fieldNameToId: Record<string, string> = {};
+  for (const f of fields) {
+    fieldNameToId[f.field_name] = f.field_id;
+  }
+
+  // 如果有搜索关键字，生成飞书filter
   let finalFilter = filter;
-  if (search) {
-    const { filters } = parseSearchQuery(search);
-    if (filters.length > 0) {
-      finalFilter = filters.join(" && ");
+  if (searchKeyword) {
+    // 构建 OR 条件：CONTAINS(字段, "keyword")
+    const conditions = searchFields
+      .filter(fieldName => fieldNameToId[fieldName])
+      .map(fieldName => {
+        const fieldId = fieldNameToId[fieldName];
+        return `AND(CurrentValue.[${fieldId}].contains("${searchKeyword}"))`;
+      });
+    
+    if (conditions.length > 0) {
+      // 使用 OR 连接多个字段的搜索条件
+      const orCondition = conditions.join(",").replace(/^AND\(/, "OR(");
+      finalFilter = orCondition;
     }
   }
 
   try {
     // 获取当前表和设备表的字段定义，用于Lookup字段映射
-    const [fields, deviceFields] = await Promise.all([
-      listBitableFields(store.base_token, tableId) as Promise<FieldDef[]>,
+    const [deviceFields] = await Promise.all([
       listBitableFields(store.base_token, store.tables.device) as Promise<FieldDef[]>,
     ]);
 
@@ -144,6 +123,7 @@ export async function GET(
     const lookupFieldMapping: { lookupField: string; deviceFieldId: string }[] = [];
     for (const field of fields) {
       if (field.type === 19 && field.ui_type === "Lookup" && field.property?.target_field) {
+        // target_field 存储的是设备表字段的 field_id
         lookupFieldMapping.push({
           lookupField: field.field_name,
           deviceFieldId: field.property.target_field,
@@ -165,6 +145,7 @@ export async function GET(
       for (const mapping of lookupFieldMapping) {
         const value = processed[mapping.lookupField];
         if (Array.isArray(value) && value.length > 0 && typeof value[0] === "string" && (value[0] as string).startsWith("opt")) {
+          // 获取该Lookup字段对应的设备表字段的options
           const options = deviceOptionsByFieldId[mapping.deviceFieldId];
           if (options) {
             const names = (value as string[]).map((id) => {

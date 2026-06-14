@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { Box, Typography } from "@mui/material";
 import DataTable, { ColumnDef } from "@/components/DataTable";
 import { useTableData, useTableFields } from "@/hooks/useTableData";
@@ -30,13 +30,36 @@ const INVENTORY_EDITABLE_OPTIONS = [
 export default function InventoryPage() {
   const { storeId } = useCurrentStore();
   const [pageToken, setPageToken] = useState<string | undefined>(undefined);
+  const [searchKeyword, setSearchKeyword] = useState("");
+  
   const { items, total, has_more, isLoading, error, mutate, page_token } = useTableData(
     storeId,
     TABLE_NAME,
-    { page_size: 20, page_token: pageToken }
+    { page_size: 20, page_token: pageToken, search: searchKeyword }
   );
 
   const { fields } = useTableFields(storeId, TABLE_NAME);
+  
+  // P1-RE-002-fix2: 获取设备表的字段定义，用于Lookup字段的options映射
+  const { fields: deviceFields } = useTableFields(storeId, "device");
+  
+  // 提取设备表的"设备型号"和"分类"选项，用于库存表Lookup字段显示
+  const extraOptions = useMemo(() => {
+    const options: { id: string; name: string }[] = [];
+    if (deviceFields) {
+      // 设备型号
+      const deviceModelField = deviceFields.find((f) => f.field_name === "设备型号");
+      if (deviceModelField?.property?.options) {
+        options.push(...deviceModelField.property.options);
+      }
+      // 分类
+      const categoryField = deviceFields.find((f) => f.field_name === "分类");
+      if (categoryField?.property?.options) {
+        options.push(...categoryField.property.options);
+      }
+    }
+    return options;
+  }, [deviceFields]);
 
   const columnsWithOptions = inventoryColumns.map((col) => {
     // P0-003修复：库存状态字段名改为"状态"
@@ -82,6 +105,12 @@ export default function InventoryPage() {
     [storeId]
   );
 
+  // 搜索处理：清空分页，重新搜索
+  const handleSearch = useCallback((keyword: string) => {
+    setSearchKeyword(keyword);
+    setPageToken(undefined); // 重置分页
+  }, []);
+
   return (
     <Box>
       <Typography variant="h5" fontWeight="bold" gutterBottom>
@@ -97,10 +126,13 @@ export default function InventoryPage() {
         hasMore={has_more}
         onPageChange={() => setPageToken(page_token)}
         onRefresh={() => mutate()}
+        onSearch={handleSearch}
         onUpdate={handleUpdate}
         emptyDisplay="-"
         // P1-006修复：传递字段定义用于映射 formula/lookup 选项ID
         fieldDefs={fields}
+        // P1-RE-002-fix2: 传递设备表的options用于Lookup字段显示
+        extraOptions={extraOptions}
       />
     </Box>
   );

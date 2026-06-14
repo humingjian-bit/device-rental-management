@@ -26,10 +26,12 @@ const deviceColumns: ColumnDef[] = [
 export default function DevicePage() {
   const { storeId } = useCurrentStore();
   const [pageToken, setPageToken] = useState<string | undefined>(undefined);
+  const [searchKeyword, setSearchKeyword] = useState("");
+  
   const { items, total, has_more, isLoading, error, mutate, page_token } = useTableData(
     storeId,
     TABLE_NAME,
-    { page_size: 20, page_token: pageToken }
+    { page_size: 20, page_token: pageToken, search: searchKeyword }
   );
 
   const { fields, isLoading: fieldsLoading } = useTableFields(storeId, TABLE_NAME);
@@ -74,6 +76,12 @@ export default function DevicePage() {
     [storeId]
   );
 
+  // 搜索处理：清空分页，重新搜索
+  const handleSearch = useCallback((keyword: string) => {
+    setSearchKeyword(keyword);
+    setPageToken(undefined); // 重置分页
+  }, []);
+
   return (
     <Box>
       <Typography variant="h5" fontWeight="bold" gutterBottom>
@@ -89,6 +97,7 @@ export default function DevicePage() {
         hasMore={has_more}
         onPageChange={() => setPageToken(page_token)}
         onRefresh={() => mutate()}
+        onSearch={handleSearch}
         onCreate={handleCreate}
         onUpdate={handleUpdate}
         emptyDisplay="-"
