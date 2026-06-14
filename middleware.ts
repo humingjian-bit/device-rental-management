@@ -64,6 +64,12 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // 4b. 检查临时访问 cookie（access_token）
+  const accessToken = request.cookies.get("access_token")?.value;
+  if (accessToken && validateToken(accessToken)) {
+    return NextResponse.next();
+  }
+
   // 5. 检查 URL 参数中的 token（用于临时访问链接）
   const tokenFromUrl = request.nextUrl.searchParams.get("k");
   
