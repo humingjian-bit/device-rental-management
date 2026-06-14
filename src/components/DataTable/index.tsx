@@ -251,6 +251,7 @@ export default function DataTable({
   const [searchText, setSearchText] = useState(searchValue);
   const [pageTokens, setPageTokens] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(0);
+  const [jumpPage, setJumpPage] = useState("");
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editRecord, setEditRecord] = useState<Record<string, unknown> | null>(null);
   const [editFields, setEditFields] = useState<Record<string, unknown>>({});
@@ -292,6 +293,26 @@ export default function DataTable({
     setPageTokens([]);
   };
 
+  // 跳转到指定页（光标分页，只能跳到已加载过的页）
+  const handleJumpToPage = () => {
+    const target = parseInt(jumpPage, 10);
+    if (isNaN(target) || target < 1) return;
+    if (target === 1) {
+      handleFirstPage();
+    } else if (target === currentPage + 1 && hasMore) {
+      handleNextPage();
+    } else if (target > 1 && target <= pageTokens.length + 1) {
+      // 已加载过该页的token
+      const tokenIndex = target - 2;
+      const token = pageTokens[tokenIndex];
+      setCurrentPage(target - 1);
+      onPageChange(token);
+    } else {
+      alert("仅支持跳转到已加载的页面，请先逐页浏览");
+    }
+    setJumpPage("");
+  };
+
   const handleFirstPage = () => {
     setCurrentPage(0);
     setPageTokens([]);
@@ -319,8 +340,8 @@ export default function DataTable({
     }
   };
 
-  // 过滤（仅前端本地搜索）
-  const filteredRows = searchText && !onSearchChange
+  // 过滤（前端本地搜索，始终对当前页数据生效）
+  const filteredRows = searchText
     ? rows.filter((row) =>
         columns.some((col) => {
           const val = row[col.field];
@@ -393,7 +414,7 @@ export default function DataTable({
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
         <TextField
           size="small"
-          placeholder="搜索（SN:xxx / 型号:xxx / 平台:xxx / 状态:xxx）"
+          placeholder="搜索（SN:xxx / 型号:xxx / 平台:xxx / 状态:xxx 或直接输入关键词）"
           value={searchText}
           onChange={(e) => setSearchText(e.target.value)}
           onKeyPress={handleKeyPress}
@@ -522,9 +543,21 @@ export default function DataTable({
           <IconButton size="small" onClick={handlePrevPage} disabled={currentPage === 0}>
             <PrevIcon />
           </IconButton>
-          <Typography variant="body2" sx={{ mx: 1 }}>
+          <Typography variant="body2" sx={{ mx: 0.5 }}>
             第 {currentPage + 1} 页
           </Typography>
+          <TextField
+            size="small"
+            placeholder="跳转"
+            value={jumpPage}
+            onChange={(e) => setJumpPage(e.target.value)}
+            onKeyPress={(e) => e.key === "Enter" && handleJumpToPage()}
+            sx={{ width: 60, mx: 0.5 }}
+            inputProps={{ style: { padding: "4px 8px", textAlign: "center" } }}
+          />
+          <Button size="small" variant="text" onClick={handleJumpToPage} sx={{ minWidth: 0, px: 1 }}>
+            跳转
+          </Button>
           <IconButton size="small" onClick={handleNextPage} disabled={!hasMore}>
             <NextIcon />
           </IconButton>
