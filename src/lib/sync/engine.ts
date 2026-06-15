@@ -215,7 +215,7 @@ export class SyncEngine {
 
     let total = 0;
     for (let i = 0; i < fields.length; i += BATCH_SIZE) {
-      const batch = fields.slice(i, i + BATCH_SIZE);
+      const batch = fields.slice(i, i + BATCH_SIZE) as { fields: Record<string, unknown> }[];
       try {
         const result = await batchCreateBitableRecords(baseToken, tableId, batch);
         total += result.length;
@@ -237,7 +237,7 @@ export class SyncEngine {
     tableId: string,
     orders: { order: SyncOrder; record_id: string }[]
   ): Promise<number> {
-    const records = orders.map(({ order, record_id }) => ({
+    const records: { record_id: string; fields: Record<string, unknown> }[] = orders.map(({ order, record_id }) => ({
       record_id,
       fields: this.orderToFields(order, false),
     }));
