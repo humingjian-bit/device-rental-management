@@ -19,6 +19,27 @@ interface FieldDef {
   };
 }
 
+// 模糊搜索：只搜索这3个关键字段
+const FUZZY_SEARCH_FIELDS = ["SN编码", "设备型号", "分类"];
+
+/**
+ * 模糊匹配：只匹配关键字段
+ */
+function fuzzyMatch(item: Record<string, unknown>, keyword: string): boolean {
+  const lowerKeyword = keyword.toLowerCase();
+  for (const field of FUZZY_SEARCH_FIELDS) {
+    const value = item[field];
+    if (value === null || value === undefined) continue;
+    
+    const strValue = Array.isArray(value) 
+      ? value.join(" ").toLowerCase() 
+      : String(value).toLowerCase();
+    
+    if (strValue.includes(lowerKeyword)) return true;
+  }
+  return false;
+}
+
 // GET /api/base/[store]/[table] — 查询记录列表或字段定义
 export async function GET(
   request: NextRequest,
@@ -69,45 +90,22 @@ export async function GET(
     }
   }
 
-  // P1-RE-002-fix3 & P1-003: 获取记录列表时，同时获取关联表的options用于Lookup字段映射
+  // 获取记录列表参数
   const pageSize = Number(searchParams.get("page_size")) || 20;
   const pageToken = searchParams.get("page_token") || undefined;
   const filter = searchParams.get("filter") || undefined;
   const sort = searchParams.get("sort") || undefined;
   
-  // 全局搜索支持
-  const searchKeyword = searchParams.get("search") || undefined;
-  const searchFieldsParam = searchParams.get("searchFields");
-  const searchFields = searchFieldsParam ? searchFieldsParam.split(",") : ["SN编码", "设备型号", "备注"];
-
-  // 获取字段定义
-  const fields = await listBitableFields(store.base_token, tableId) as FieldDef[];
-  const fieldNameToId: Record<string, string> = {};
-  for (const f of fields) {
-    fieldNameToId[f.field_name] = f.field_id;
-  }
-
-  // 如果有搜索关键字，生成飞书filter
-  let finalFilter = filter;
-  if (searchKeyword) {
-    // 构建 OR 条件：CONTAINS(字段, "keyword")
-    const conditions = searchFields
-      .filter(fieldName => fieldNameToId[fieldName])
-      .map(fieldName => {
-        const fieldId = fieldNameToId[fieldName];
-        return `AND(CurrentValue.[${fieldId}].contains("${searchKeyword}"))`;
-      });
-    
-    if (conditions.length > 0) {
-      // 使用 OR 连接多个字段的搜索条件
-      const orCondition = conditions.join(",").replace(/^AND\(/, "OR(");
-      finalFilter = orCondition;
-    }
-  }
+  // 搜索参数
+  const search = searchParams.get("search") || undefined;  // 模糊搜索关键词
+  const searchField = searchParams.get("search_field") || undefined;  // 精确搜索字段名
+  const searchValue = searchParams.get("search_value") || undefined;  // 精确搜索值
+  const searchMode = searchParams.get("search_mode") || "fuzzy";  // fuzzy 或 exact
 
   try {
     // 获取当前表和设备表的字段定义，用于Lookup字段映射
-    const [deviceFields] = await Promise.all([
+    const [fields, deviceFields] = await Promise.all([
+      listBitableFields(store.base_token, tableId) as Promise<FieldDef[]>,
       listBitableFields(store.base_token, store.tables.device) as Promise<FieldDef[]>,
     ]);
 
@@ -123,7 +121,6 @@ export async function GET(
     const lookupFieldMapping: { lookupField: string; deviceFieldId: string }[] = [];
     for (const field of fields) {
       if (field.type === 19 && field.ui_type === "Lookup" && field.property?.target_field) {
-        // target_field 存储的是设备表字段的 field_id
         lookupFieldMapping.push({
           lookupField: field.field_name,
           deviceFieldId: field.property.target_field,
@@ -131,40 +128,199 @@ export async function GET(
       }
     }
 
-    const result = await listBitableRecords(store.base_token, tableId, {
-      page_size: pageSize,
-      page_token: pageToken,
-      filter: finalFilter,
-      sort,
-    });
+    // 构建字段名到ID的映射
+    const fieldNameToId: Record<string, string> = {};
+    for (const field of fields) {
+      fieldNameToId[field.field_name] = field.field_id;
+    }
 
-    // 转换Lookup字段的选项ID为选项名称
-    const processedItems = result.items.map((item: Record<string, unknown>) => {
-      const processed: Record<string, unknown> = { ...item };
-      
-      for (const mapping of lookupFieldMapping) {
-        const value = processed[mapping.lookupField];
-        if (Array.isArray(value) && value.length > 0 && typeof value[0] === "string" && (value[0] as string).startsWith("opt")) {
-          // 获取该Lookup字段对应的设备表字段的options
-          const options = deviceOptionsByFieldId[mapping.deviceFieldId];
-          if (options) {
-            const names = (value as string[]).map((id) => {
-              const opt = options.find((o) => o.id === id);
-              return opt ? opt.name : id;
-            });
-            processed[mapping.lookupField] = names;
+    // 处理高级搜索（精确匹配）
+    let advancedFilter: string | undefined = undefined;
+    if (searchMode === "exact" && searchField && searchValue) {
+      const fieldId = fieldNameToId[searchField];
+      if (fieldId) {
+        // 构建精确匹配filter
+        advancedFilter = `AND(CurrentValue.[${fieldId}].contains("${searchValue}"))`;
+      }
+    }
+
+    // 合并filter：优先使用高级搜索filter，其次使用传入的filter
+    const finalFilter = advancedFilter || filter;
+
+    let allItems: Record<string, unknown>[] = [];
+    let totalCount = 0;
+    let hasMore = true;
+    let nextPageToken: string | undefined = undefined;
+
+    // 搜索模式处理
+    if (searchMode === "exact") {
+      // 精确搜索：直接使用飞书filter，性能好
+      const result = await listBitableRecords(store.base_token, tableId, {
+        page_size: pageSize,
+        page_token: pageToken,
+        filter: finalFilter,
+        sort,
+      });
+
+      // 转换Lookup字段
+      allItems = result.items.map((item: Record<string, unknown>) => {
+        const processed: Record<string, unknown> = { ...item };
+        for (const mapping of lookupFieldMapping) {
+          const value = processed[mapping.lookupField];
+          if (Array.isArray(value) && value.length > 0 && typeof value[0] === "string" && (value[0] as string).startsWith("opt")) {
+            const options = deviceOptionsByFieldId[mapping.deviceFieldId];
+            if (options) {
+              const names = (value as string[]).map((id) => {
+                const opt = options.find((o) => o.id === id);
+                return opt ? opt.name : id;
+              });
+              processed[mapping.lookupField] = names;
+            }
           }
         }
-      }
+        return processed;
+      });
+
+      totalCount = result.total;
+      hasMore = result.has_more;
+      nextPageToken = result.page_token;
+    } else if (search) {
+      // 模糊搜索：获取全部数据，后端过滤（只搜索3个关键字段）
+      const MAX_TOTAL = 500; // 限制获取量，避免太慢
+      let currentToken: string | undefined = undefined;
       
-      return processed;
-    });
+      // 先获取一页获取总数
+      const firstPage = await listBitableRecords(store.base_token, tableId, {
+        page_size: 1,
+        page_token: undefined,
+        filter: undefined,
+        sort,
+      });
+      totalCount = firstPage.total;
+
+      // 如果总数太多，提示前端
+      if (totalCount > MAX_TOTAL) {
+        // 获取部分数据用于模糊过滤
+        while (allItems.length < MAX_TOTAL) {
+          const result = await listBitableRecords(store.base_token, tableId, {
+            page_size: 100,
+            page_token: currentToken,
+            filter: undefined,
+            sort,
+          });
+
+          // 转换Lookup并过滤
+          const filteredItems = result.items
+            .map((item: Record<string, unknown>) => {
+              const processed: Record<string, unknown> = { ...item };
+              for (const mapping of lookupFieldMapping) {
+                const value = processed[mapping.lookupField];
+                if (Array.isArray(value) && value.length > 0 && typeof value[0] === "string" && (value[0] as string).startsWith("opt")) {
+                  const options = deviceOptionsByFieldId[mapping.deviceFieldId];
+                  if (options) {
+                    const names = (value as string[]).map((id) => {
+                      const opt = options.find((o) => o.id === id);
+                      return opt ? opt.name : id;
+                    });
+                    processed[mapping.lookupField] = names;
+                  }
+                }
+              }
+              return processed;
+            })
+            .filter((item) => fuzzyMatch(item, search));
+
+          allItems = allItems.concat(filteredItems);
+          
+          if (!result.has_more || !result.page_token) break;
+          currentToken = result.page_token;
+        }
+
+        // 对过滤结果分页
+        allItems = allItems.slice(0, pageSize);
+        hasMore = allItems.length < totalCount && allItems.length >= pageSize;
+      } else {
+        // 总数不多，可以获取全部
+        while (hasMore && allItems.length < MAX_TOTAL) {
+          const result = await listBitableRecords(store.base_token, tableId, {
+            page_size: 100,
+            page_token: currentToken,
+            filter: undefined,
+            sort,
+          });
+
+          // 转换Lookup字段
+          const processedItems = result.items.map((item: Record<string, unknown>) => {
+            const processed: Record<string, unknown> = { ...item };
+            for (const mapping of lookupFieldMapping) {
+              const value = processed[mapping.lookupField];
+              if (Array.isArray(value) && value.length > 0 && typeof value[0] === "string" && (value[0] as string).startsWith("opt")) {
+                const options = deviceOptionsByFieldId[mapping.deviceFieldId];
+                if (options) {
+                  const names = (value as string[]).map((id) => {
+                    const opt = options.find((o) => o.id === id);
+                    return opt ? opt.name : id;
+                  });
+                  processed[mapping.lookupField] = names;
+                }
+              }
+            }
+            return processed;
+          });
+
+          allItems = allItems.concat(processedItems);
+          hasMore = result.has_more && !!result.page_token;
+          currentToken = result.page_token;
+
+          if (!hasMore) break;
+        }
+
+        // 后端模糊过滤
+        const filteredItems = allItems.filter((item) => fuzzyMatch(item, search));
+        
+        // 对过滤结果分页
+        allItems = filteredItems.slice(0, pageSize);
+        totalCount = filteredItems.length;
+        hasMore = filteredItems.length > pageSize;
+      }
+    } else {
+      // 普通模式：正常分页获取
+      const result = await listBitableRecords(store.base_token, tableId, {
+        page_size: pageSize,
+        page_token: pageToken,
+        filter: finalFilter,
+        sort,
+      });
+
+      // 转换Lookup字段
+      allItems = result.items.map((item: Record<string, unknown>) => {
+        const processed: Record<string, unknown> = { ...item };
+        for (const mapping of lookupFieldMapping) {
+          const value = processed[mapping.lookupField];
+          if (Array.isArray(value) && value.length > 0 && typeof value[0] === "string" && (value[0] as string).startsWith("opt")) {
+            const options = deviceOptionsByFieldId[mapping.deviceFieldId];
+            if (options) {
+              const names = (value as string[]).map((id) => {
+                const opt = options.find((o) => o.id === id);
+                return opt ? opt.name : id;
+              });
+              processed[mapping.lookupField] = names;
+            }
+          }
+        }
+        return processed;
+      });
+
+      totalCount = result.total;
+      hasMore = result.has_more;
+      nextPageToken = result.page_token;
+    }
 
     return NextResponse.json({
-      items: processedItems,
-      total: result.total,
-      has_more: result.has_more,
-      page_token: result.page_token,
+      items: allItems,
+      total: totalCount,
+      has_more: hasMore,
+      page_token: nextPageToken,
     });
   } catch (error) {
     console.error("Failed to list records:", error);
@@ -223,19 +379,11 @@ export async function PUT(
   }
 
   try {
-    const body = await request.json();
-    const { record_id, ...fields } = body;
-
+    const { record_id, ...fields } = await request.json();
     if (!record_id) {
       return NextResponse.json({ error: "Missing record_id" }, { status: 400 });
     }
-
-    const record = await updateBitableRecord(
-      store.base_token,
-      tableId,
-      record_id,
-      fields
-    );
+    const record = await updateBitableRecord(store.base_token, tableId, record_id, fields);
     return NextResponse.json({ record });
   } catch (error) {
     console.error("Failed to update record:", error);
