@@ -333,7 +333,7 @@ export default function DataTable({
   };
 
   // 获取可搜索的字段列表（从columns中提取）
-  const searchableFields = columns.map(col => col.field_name || col.field);
+  const searchableFields = columns.map(col => col.headerName);
 
   const handleEdit = useCallback((row: Record<string, unknown>) => {
     setEditRecord(row);
