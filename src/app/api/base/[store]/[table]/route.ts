@@ -205,6 +205,7 @@ export async function GET(
         });
         
         if (!result.has_more || !result.page_token) break;
+        allItems = allItems.concat(matchedItems);
         currentToken = result.page_token;
       }
       
