@@ -140,7 +140,7 @@ export async function GET(
       const fieldId = fieldNameToId[searchField];
       if (fieldId) {
         // 构建精确匹配filter - 使用飞书filter语法
-        advancedFilter = `[${fieldId}].contains("${searchValue}")`;
+        advancedFilter = `AND([${fieldId}].contains("${searchValue}"))`;
       }
     }
 
