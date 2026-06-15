@@ -137,10 +137,13 @@ export async function GET(
     // 处理高级搜索（精确匹配）
     let advancedFilter: string | undefined = undefined;
     if (searchMode === "exact" && searchField && searchValue) {
+      console.log(`[高级搜索] searchField="${searchField}", fieldNameToId keys=${Object.keys(fieldNameToId).slice(0,5).join(',')}`);
       const fieldId = fieldNameToId[searchField];
+      console.log(`[高级搜索] fieldId=${fieldId}`);
       if (fieldId) {
         // 构建精确匹配filter - 使用飞书filter语法
         advancedFilter = `[${fieldId}] = "${searchValue}"`;
+        console.log(`[高级搜索] filter=${advancedFilter}`);
       }
     }
 
