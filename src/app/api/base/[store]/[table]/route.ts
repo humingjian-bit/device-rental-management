@@ -24,6 +24,79 @@ interface FieldDef {
 const FUZZY_SEARCH_FIELDS = ["SN编码", "设备型号", "分类"];
 
 /**
+ * 统一格式化飞书字段值
+ * 处理search API返回的各种格式
+ */
+function formatFieldValue(value: unknown, fieldDef?: FieldDef, optionsMap?: Record<string, { id: string; name: string }[]>): unknown {
+  if (value === null || value === undefined) return value;
+  
+  // 1. 关联字段格式: {link_record_ids: [...]}
+  if (typeof value === 'object' && !Array.isArray(value) && 'link_record_ids' in value) {
+    const linkValue = value as { link_record_ids?: string[] };
+    return linkValue.link_record_ids || [];
+  }
+  
+  // 2. 公式/自动编号格式: {type: N, value: [...]}
+  if (typeof value === 'object' && !Array.isArray(value) && 'type' in value && 'value' in value) {
+    const typedValue = value as { type?: number; value?: unknown[] };
+    if (Array.isArray(typedValue.value)) {
+      // 如果value是对象数组（如富文本），提取text字段
+      if (typedValue.value.length > 0 && typeof typedValue.value[0] === 'object') {
+        return typedValue.value.map((v: unknown) => {
+          if (typeof v === 'object' && v !== null && 'text' in v) {
+            return (v as { text: unknown }).text;
+          }
+          return v;
+        });
+      }
+      // 直接返回value数组
+      return typedValue.value;
+    }
+  }
+  
+  // 3. 富文本数组格式: [{text: "...", type: "text"}]
+  if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'object' && 'text' in (value[0] as object)) {
+    return (value as Array<{ text?: unknown }>).map(v => v.text).filter(Boolean);
+  }
+  
+  // 4. 选项字段格式（需要转换为名称）
+  if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'string') {
+    const firstStr = (value as string[])[0];
+    // 如果是选项ID（以opt开头），尝试转换
+    if (firstStr.startsWith('opt') && optionsMap) {
+      return (value as string[]).map(id => {
+        for (const opts of Object.values(optionsMap)) {
+          const opt = opts.find(o => o.id === id);
+          if (opt) return opt.name;
+        }
+        return id;
+      });
+    }
+    // 如果是Lookup值（如设备型号），直接返回
+    return value;
+  }
+  
+  // 5. 其他情况直接返回
+  return value;
+}
+
+/**
+ * 统一格式化记录的所有字段
+ */
+function formatRecord(record: Record<string, unknown>, fields: FieldDef[], optionsMap?: Record<string, { id: string; name: string }[]>): Record<string, unknown> {
+  const formatted: Record<string, unknown> = { ...record };
+  
+  for (const field of fields) {
+    const value = formatted[field.field_name];
+    if (value !== null && value !== undefined) {
+      formatted[field.field_name] = formatFieldValue(value, field, optionsMap);
+    }
+  }
+  
+  return formatted;
+}
+
+/**
  * 模糊匹配：只匹配关键字段
  */
 function fuzzyMatch(item: Record<string, unknown>, keyword: string): boolean {
@@ -194,41 +267,10 @@ export async function GET(
           sort,
         });
 
-        // 转换Lookup字段（处理search API返回的格式）
-        allItems = searchResult.items.map((item: Record<string, unknown>) => {
-          const processed: Record<string, unknown> = { ...item };
-          for (const mapping of lookupFieldMapping) {
-            const value = processed[mapping.lookupField];
-            // search API返回格式: {type:3, value:["Pocket3"]} 或 数组
-            let displayValue: string | string[] = [];
-            
-            if (Array.isArray(value)) {
-              // 数组格式：["Pocket3"] 或 ["opt_xxx"]
-              displayValue = value as string[];
-            } else if (value && typeof value === 'object') {
-              // 新格式：{type:3, value:["Pocket3"]}
-              const lookupObj = value as { type?: number; value?: string[] };
-              if (lookupObj.value) {
-                displayValue = lookupObj.value;
-              }
-            }
-            
-            if (displayValue.length > 0) {
-              // 如果是option ID数组，转换为名称
-              if (typeof displayValue[0] === 'string' && (displayValue[0] as string).startsWith("opt")) {
-                const options = deviceOptionsByFieldId[mapping.deviceFieldId];
-                if (options) {
-                  displayValue = (displayValue as string[]).map((id) => {
-                    const opt = options.find((o) => o.id === id);
-                    return opt ? opt.name : id;
-                  });
-                }
-              }
-              processed[mapping.lookupField] = displayValue;
-            }
-          }
-          return processed;
-        });
+        // 使用统一格式化函数处理所有字段
+        allItems = searchResult.items.map((item: Record<string, unknown>) => 
+          formatRecord(item, fields, deviceOptionsByFieldId)
+        );
 
         totalCount = searchResult.total;
         hasMore = searchResult.has_more;
@@ -248,36 +290,9 @@ export async function GET(
             sort,
           });
 
-          const processedItems = result.items.map((item: Record<string, unknown>) => {
-            const processed: Record<string, unknown> = { ...item };
-            for (const mapping of lookupFieldMapping) {
-              const value = processed[mapping.lookupField];
-              let displayValue: string | string[] = [];
-              
-              if (Array.isArray(value)) {
-                displayValue = value as string[];
-              } else if (value && typeof value === 'object') {
-                const lookupObj = value as { type?: number; value?: string[] };
-                if (lookupObj.value) {
-                  displayValue = lookupObj.value;
-                }
-              }
-              
-              if (displayValue.length > 0) {
-                if (typeof displayValue[0] === 'string' && (displayValue[0] as string).startsWith("opt")) {
-                  const options = deviceOptionsByFieldId[mapping.deviceFieldId];
-                  if (options) {
-                    displayValue = (displayValue as string[]).map((id) => {
-                      const opt = options.find((o) => o.id === id);
-                      return opt ? opt.name : id;
-                    });
-                  }
-                }
-                processed[mapping.lookupField] = displayValue;
-              }
-            }
-            return processed;
-          });
+          const processedItems = result.items.map((item: Record<string, unknown>) => 
+            formatRecord(item, fields, deviceOptionsByFieldId)
+          );
 
           const matchedItems = processedItems.filter((item) => {
             const fieldValue = item[searchField];
@@ -368,36 +383,9 @@ export async function GET(
           });
 
           // 转换Lookup字段
-          const processedItems = result.items.map((item: Record<string, unknown>) => {
-            const processed: Record<string, unknown> = { ...item };
-            for (const mapping of lookupFieldMapping) {
-              const value = processed[mapping.lookupField];
-              let displayValue: string | string[] = [];
-              
-              if (Array.isArray(value)) {
-                displayValue = value as string[];
-              } else if (value && typeof value === 'object') {
-                const lookupObj = value as { type?: number; value?: string[] };
-                if (lookupObj.value) {
-                  displayValue = lookupObj.value;
-                }
-              }
-              
-              if (displayValue.length > 0) {
-                if (typeof displayValue[0] === 'string' && (displayValue[0] as string).startsWith("opt")) {
-                  const options = deviceOptionsByFieldId[mapping.deviceFieldId];
-                  if (options) {
-                    displayValue = (displayValue as string[]).map((id) => {
-                      const opt = options.find((o) => o.id === id);
-                      return opt ? opt.name : id;
-                    });
-                  }
-                }
-                processed[mapping.lookupField] = displayValue;
-              }
-            }
-            return processed;
-          });
+          const processedItems = result.items.map((item: Record<string, unknown>) => 
+            formatRecord(item, fields, deviceOptionsByFieldId)
+          );
 
           allItems = allItems.concat(processedItems);
           hasMore = result.has_more && !!result.page_token;
@@ -423,23 +411,10 @@ export async function GET(
         sort,
       });
 
-      // 转换Lookup字段
-      allItems = result.items.map((item: Record<string, unknown>) => {
-        const processed: Record<string, unknown> = { ...item };
-        for (const mapping of lookupFieldMapping) {
-          const value = processed[mapping.lookupField];
-          if (Array.isArray(value) && value.length > 0 && typeof value[0] === "string" && (value[0] as string).startsWith("opt")) {
-            const options = deviceOptionsByFieldId[mapping.deviceFieldId];
-            if (options) {
-              const names = (value as string[]).map((id) => {
-                const opt = options.find((o) => o.id === id);
-                return opt ? opt.name : id;
-              });
-              processed[mapping.lookupField] = names;
-            }
-          }
-        }
-        return processed;
+      // 使用统一格式化函数处理所有字段
+      allItems = result.items.map((item: Record<string, unknown>) => 
+        formatRecord(item, fields, deviceOptionsByFieldId)
+      );
       });
 
       totalCount = result.total;
