@@ -98,9 +98,12 @@ export async function GET(
   
   // 搜索参数
   const search = searchParams.get("search") || undefined;  // 模糊搜索关键词
-  const searchField = searchParams.get("search_field") || undefined;  // 精确搜索字段名
-  const searchValue = searchParams.get("search_value") || undefined;  // 精确搜索值
+  const searchField = decodeURIComponent(searchParams.get("search_field") || "") || undefined;  // 精确搜索字段名
+  const searchValue = decodeURIComponent(searchParams.get("search_value") || "") || undefined;  // 精确搜索值
   const searchMode = searchParams.get("search_mode") || "fuzzy";  // fuzzy 或 exact
+  
+  // 调试日志
+  console.log(`[搜索] mode=${searchMode}, field=${searchField}, value=${searchValue}`);
 
   try {
     // 获取当前表和设备表的字段定义，用于Lookup字段映射
@@ -191,6 +194,10 @@ export async function GET(
 
         // 精确过滤 - 支持多种字段类型
         const matchedItems = processedItems.filter((item) => {
+          // 调试
+          if (allItems.length < 10) {
+            console.log(`[过滤] searchField=${searchField}, item["租金"]=${item["租金"]}, 类型=${typeof item["租金"]}`);
+          }
           const fieldValue = item[searchField];
           // 处理空值
           if (fieldValue === null || fieldValue === undefined || fieldValue === "") {
