@@ -116,9 +116,9 @@ async function formatRecordAsync(
             const displayValues: string[] = [];
             for (const recordId of recordIds) {
               try {
+                // getBitableRecord返回的是fields的展开，不需要再访问.fields
                 const linkedRecord = await getBitableRecord(store.base_token, deviceTableId, recordId);
-                const fieldsData = linkedRecord.fields as Record<string, unknown>;
-                const displayValue = fieldsData[targetDeviceField.field_name];
+                const displayValue = linkedRecord[targetDeviceField.field_name];
                 if (displayValue !== null && displayValue !== undefined) {
                   // 格式化显示值
                   if (Array.isArray(displayValue)) {
