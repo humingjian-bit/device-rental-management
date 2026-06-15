@@ -109,8 +109,9 @@ async function formatRecordAsync(
           const deviceTableId = store.tables.device;
           
           // 找到target_field对应的设备表字段
-          const targetDeviceField = field.property 
-            ? deviceFields.find(f => f.field_id === field.property.target_field)
+          const fieldProperty = field.property;
+          const targetDeviceField = fieldProperty
+            ? deviceFields.find(f => f.field_id === fieldProperty.target_field)
             : null;
           
           if (targetDeviceField) {
