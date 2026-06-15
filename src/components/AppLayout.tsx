@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import {
   Select,
   ThemeProvider,
@@ -21,6 +21,8 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
+  Tooltip,
+  Collapse,
 } from "@mui/material";
 import {
   Home as HomeIcon,
@@ -28,15 +30,18 @@ import {
   Inventory as InventoryIcon,
   Description as OrderIcon,
   Build as RepairIcon,
+  Sync as SyncIcon,
   Store as StoreIcon,
   Menu as MenuIcon,
+  ChevronLeft as ChevronLeftIcon,
+  ChevronRight as ChevronRightIcon,
   Logout as LogoutIcon,
 } from "@mui/icons-material";
 import { useRouter, usePathname } from "next/navigation";
-import { useState } from "react";
 import { useCurrentStore, useStores, useAuth } from "@/hooks/useStore";
 
 const DRAWER_WIDTH = 220;
+const COLLAPSED_WIDTH = 64;
 
 const menuItems = [
   { key: "/", icon: <HomeIcon />, label: "首页" },
@@ -44,6 +49,7 @@ const menuItems = [
   { key: "/inventory", icon: <InventoryIcon />, label: "库存管理" },
   { key: "/order", icon: <OrderIcon />, label: "订单管理" },
   { key: "/repair", icon: <RepairIcon />, label: "维修管理" },
+  { key: "/sync", icon: <SyncIcon />, label: "更新订单" },
 ];
 
 const theme = createTheme({
@@ -54,43 +60,126 @@ const theme = createTheme({
   typography: { fontSize: 14 },
 });
 
+interface MenuItemProps {
+  item: { key: string; icon: React.ReactNode; label: string };
+  collapsed: boolean;
+  selected: boolean;
+  onClick: () => void;
+}
+
+function CollapsibleMenuItem({ item, collapsed, selected, onClick }: MenuItemProps) {
+  const button = (
+    <ListItemButton
+      selected={selected}
+      onClick={onClick}
+      sx={{
+        minHeight: 48,
+        justifyContent: collapsed ? "center" : "flex-start",
+        px: 2.5,
+        borderRadius: 1,
+        mx: 1,
+        "&.Mui-selected": {
+          bgcolor: "primary.main",
+          color: "white",
+          "& .MuiListItemIcon-root": { color: "white" },
+          "&:hover": { bgcolor: "primary.dark" },
+        },
+      }}
+    >
+      <ListItemIcon
+        sx={{
+          minWidth: 0,
+          mr: collapsed ? 0 : 2,
+          justifyContent: "center",
+          color: selected ? "white" : "inherit",
+        }}
+      >
+        {item.icon}
+      </ListItemIcon>
+      <Collapse in={!collapsed} orientation="horizontal" timeout="auto" unmountOnExit>
+        <ListItemText primary={item.label} />
+      </Collapse>
+    </ListItemButton>
+  );
+
+  return collapsed ? (
+    <Tooltip title={item.label} placement="right" arrow>
+      {button}
+    </Tooltip>
+  ) : (
+    button
+  );
+}
+
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const { storeId, switchStore } = useCurrentStore();
   const { stores } = useStores();
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
 
+  const drawerWidth = collapsed ? COLLAPSED_WIDTH : DRAWER_WIDTH;
+
   const drawerContent = (
-    <Box>
+    <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      {/* Logo区域 */}
       <Box
         sx={{
           height: 56,
           display: "flex",
           alignItems: "center",
-          justifyContent: "center",
+          justifyContent: collapsed ? "center" : "space-between",
           borderBottom: "1px solid #e0e0e0",
+          px: collapsed ? 0 : 1.5,
+          overflow: "hidden",
         }}
       >
-        <StoreIcon sx={{ mr: 1, color: "primary.main" }} />
-        <Typography variant="subtitle1" fontWeight="bold">
-          设备租赁管理
-        </Typography>
+        {!collapsed && (
+          <>
+            <StoreIcon sx={{ mr: 1, color: "primary.main", flexShrink: 0 }} />
+            <Typography
+              variant="subtitle1"
+              fontWeight="bold"
+              sx={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+            >
+              设备租赁管理
+            </Typography>
+          </>
+        )}
+        {collapsed && <StoreIcon sx={{ color: "primary.main" }} />}
+        {!collapsed && (
+          <IconButton size="small" onClick={() => setCollapsed(true)} sx={{ ml: 0.5 }}>
+            <ChevronLeftIcon />
+          </IconButton>
+        )}
       </Box>
-      <List>
+
+      {/* 菜单列表 */}
+      <List sx={{ flexGrow: 1, pt: 1 }}>
         {menuItems.map((item) => (
-          <ListItem key={item.key} disablePadding>
-            <ListItemButton
+          <ListItem key={item.key} disablePadding sx={{ mb: 0.5 }}>
+            <CollapsibleMenuItem
+              item={item}
+              collapsed={collapsed}
               selected={pathname === item.key}
               onClick={() => router.push(item.key)}
-            >
-              <ListItemIcon sx={{ minWidth: 36 }}>{item.icon}</ListItemIcon>
-              <ListItemText primary={item.label} />
-            </ListItemButton>
+            />
           </ListItem>
         ))}
       </List>
+
+      {/* 展开按钮 */}
+      {collapsed && (
+        <Box sx={{ p: 1, borderTop: "1px solid #e0e0e0", display: "flex", justifyContent: "center" }}>
+          <Tooltip title="展开菜单" placement="right">
+            <IconButton size="small" onClick={() => setCollapsed(false)}>
+              <ChevronRightIcon />
+            </IconButton>
+          </Tooltip>
+        </Box>
+      )}
     </Box>
   );
 
@@ -98,7 +187,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <Box sx={{ display: "flex", minHeight: "100vh" }}>
-        <Box component="nav" sx={{ width: { md: DRAWER_WIDTH }, flexShrink: { md: 0 } }}>
+        <Box
+          component="nav"
+          sx={{
+            width: { md: drawerWidth },
+            flexShrink: { md: 0 },
+            transition: "width 0.2s ease-in-out",
+          }}
+        >
+          {/* 移动端抽屉 */}
           <Drawer
             variant="temporary"
             open={mobileOpen}
@@ -111,11 +208,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           >
             {drawerContent}
           </Drawer>
+
+          {/* 桌面端永久抽屉 */}
           <Drawer
             variant="permanent"
             sx={{
               display: { xs: "none", md: "block" },
-              "& .MuiDrawer-paper": { width: DRAWER_WIDTH },
+              "& .MuiDrawer-paper": {
+                width: drawerWidth,
+                transition: "width 0.2s ease-in-out",
+                overflowX: "hidden",
+              },
             }}
             open
           >

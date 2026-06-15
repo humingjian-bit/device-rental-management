@@ -13,14 +13,31 @@ stores:
       repair: "tblbWVjbeXtJiNAp"
     default_warehouse: "南通仓"
     platforms:
-      - name: "优品租"
-        parser: "youpinzu"
-      - name: "惠租"
-        parser: "huizu"
-      - name: "人人租"
-        parser: "renrenzu"
-      - name: "诚赁"
-        parser: "chenglin"
+      - id: "renrenzu"
+        name: "人人租"
+        enabled: true
+        file_type: "csv"
+        encoding: "gbk"
+      - id: "huizu"
+        name: "惠租"
+        enabled: false
+        file_type: "xlsx"
+        encoding: "utf-8"
+      - id: "huizu_renewal"
+        name: "惠租续租"
+        enabled: false
+        file_type: "xlsx"
+        encoding: "utf-8"
+      - id: "youpinzu"
+        name: "优品租"
+        enabled: false
+        file_type: "xlsx"
+        encoding: "utf-8"
+      - id: "chenglin"
+        name: "诚赁"
+        enabled: false
+        file_type: "xlsx"
+        encoding: "utf-8"
 
 roles:
   admin:
