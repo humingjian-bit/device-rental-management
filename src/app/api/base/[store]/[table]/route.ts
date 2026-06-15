@@ -98,8 +98,8 @@ export async function GET(
   
   // 搜索参数
   const search = searchParams.get("search") || undefined;  // 模糊搜索关键词
-  const searchField = decodeURIComponent(searchParams.get("search_field") || "") || undefined;  // 精确搜索字段名
-  const searchValue = decodeURIComponent(searchParams.get("search_value") || "") || undefined;  // 精确搜索值
+  const searchField = searchParams.get("search_field") || undefined;  // 精确搜索字段名
+  const searchValue = searchParams.get("search_value") || undefined;  // 精确搜索值
   const searchMode = searchParams.get("search_mode") || "fuzzy";  // fuzzy 或 exact
   
   // 调试日志
