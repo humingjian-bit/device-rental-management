@@ -183,7 +183,7 @@ export class SyncEngine {
 
         const records = searchResult.items || [];
 
-        for (const record of records) {
+        for (const record of records as Array<{ record_id: string; fields?: Record<string, unknown> }>) {
           const orderNo = record.fields?.["订单号"];
           if (orderNo) {
             const snField = record.fields?.["SN编码（最最重要）"] as { link_record_ids?: string[] } | undefined;
@@ -333,14 +333,15 @@ export class SyncEngine {
       });
 
       const inventoryRecords = inventorySearchResult.items || [];
+      const typedInventoryRecords = inventoryRecords as Array<{ record_id: string; fields?: Record<string, unknown> }>;
 
-      if (inventoryRecords.length === 0) {
+      if (typedInventoryRecords.length === 0) {
         this.stats.skipped++;
         this.stats.skipped_reasons.push(`订单${order.order_no}的SN${order.sn_code}未找到库存记录`);
         return;
       }
 
-      const inventoryRecord = inventoryRecords[0];
+      const inventoryRecord = typedInventoryRecords[0];
       const inventoryRecordId = inventoryRecord.record_id;
 
       // 判断是否最新订单
@@ -399,12 +400,13 @@ export class SyncEngine {
       });
 
       const records = searchResult.items || [];
+      const typedRecords = records as Array<{ record_id: string; fields?: Record<string, unknown> }>;
 
-      if (records.length === 0) {
+      if (typedRecords.length === 0) {
         return true; // 没有其他订单，当前就是最新的
       }
 
-      const latestOrderNo = records[0].fields?.["订单号"];
+      const latestOrderNo = typedRecords[0].fields?.["订单号"];
       return latestOrderNo === order.order_no;
     } catch (error) {
       console.error("[SyncEngine] 判断最新订单失败:", error);
