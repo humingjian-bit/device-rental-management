@@ -27,6 +27,7 @@ import {
   Lock as LockIcon,
 } from "@mui/icons-material";
 import { useCurrentStore } from "@/hooks/useStore";
+import { PlatformConfig } from "@/lib/config";
 
 interface Platform {
   id: string;

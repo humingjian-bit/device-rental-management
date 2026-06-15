@@ -2,6 +2,14 @@ import YAML from "yaml";
 import fs from "fs";
 import path from "path";
 
+export interface PlatformConfig {
+  id: string;
+  name: string;
+  enabled: boolean;
+  file_type: string;
+  encoding: string;
+}
+
 export interface StoreConfig {
   id: string;
   name: string;
@@ -13,7 +21,7 @@ export interface StoreConfig {
     repair: string;
   };
   default_warehouse: string;
-  platforms: { name: string; parser: string }[];
+  platforms: PlatformConfig[];
 }
 
 export interface AppConfig {

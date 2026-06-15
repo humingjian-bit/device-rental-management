@@ -305,6 +305,43 @@ export async function batchCreateBitableRecords(
 }
 
 /**
+ * 批量更新记录
+ */
+export async function batchUpdateRecords(
+  appToken: string,
+  tableId: string,
+  records: { record_id: string; fields: Record<string, unknown> }[],
+  tokenType: "tenant" | "user" = "tenant"
+): Promise<Record<string, unknown>[]> {
+  const accessToken =
+    tokenType === "tenant" ? await getTenantAccessToken() : "";
+
+  const res = await fetch(
+    `${FEISHU_API_BASE}/bitable/v1/apps/${appToken}/tables/${tableId}/records/batch_update`,
+    {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ records }),
+    }
+  );
+
+  const data = await res.json();
+  if (data.code !== 0) {
+    throw new Error(`Failed to batch update records: ${data.msg}`);
+  }
+
+  return (data.data?.records || []).map(
+    (r: { fields?: Record<string, unknown>; record_id?: string }) => ({
+      ...r.fields,
+      _record_id: r.record_id,
+    })
+  );
+}
+
+/**
  * 搜索多维表记录（支持服务端过滤）
  * 使用飞书原生的search API，支持精确筛选
  */
