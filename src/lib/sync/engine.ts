@@ -390,12 +390,7 @@ export class SyncEngine {
           ],
         },
         field_names: ["订单号", "实际发货日期"],
-        sort: [
-          {
-            field_name: "实际发货日期",
-            desc: true,
-          },
-        ],
+        sort: "实际发货日期:desc",
         page_size: 1,
       });
 
