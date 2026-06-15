@@ -3,7 +3,7 @@
  * 格式：GBK 编码 CSV
  */
 
-import { SyncOrder } from "../types";
+import { SyncOrder } from "../sync/types";
 
 /**
  * 人人租解析器

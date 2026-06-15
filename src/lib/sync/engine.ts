@@ -4,7 +4,7 @@
  */
 
 import { getParser } from "../platforms";
-import { listBitableRecords, searchBitableRecords, batchCreateRecords, batchUpdateRecords, updateBitableRecord } from "../feishu";
+import { listBitableRecords, searchBitableRecords, batchCreateBitableRecords, batchUpdateRecords, updateBitableRecord } from "../feishu";
 import { SyncOrder, SyncResult, SyncStats, SyncLogEntry } from "./types";
 import { getStoreConfig } from "../config";
 
@@ -215,7 +215,7 @@ export class SyncEngine {
     for (let i = 0; i < fields.length; i += BATCH_SIZE) {
       const batch = fields.slice(i, i + BATCH_SIZE);
       try {
-        const result = await batchCreateRecords(baseToken, tableId, batch);
+        const result = await batchCreateBitableRecords(baseToken, tableId, batch);
         total += result.length;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
