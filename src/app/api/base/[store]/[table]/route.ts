@@ -189,13 +189,20 @@ export async function GET(
           return processed;
         });
 
-        // 精确过滤
+        // 精确过滤 - 支持多种字段类型
         const matchedItems = processedItems.filter((item) => {
-          const fieldValue = String(item[searchField] || "");
-          return fieldValue === searchValue;
+          const fieldValue = item[searchField];
+          // 处理空值
+          if (fieldValue === null || fieldValue === undefined || fieldValue === "") {
+            return searchValue === "";
+          }
+          // 如果是数组（如多选），检查数组中是否有匹配项
+          if (Array.isArray(fieldValue)) {
+            return fieldValue.some(v => String(v) === searchValue);
+          }
+          // 其他类型转字符串比较
+          return String(fieldValue) === searchValue;
         });
-
-        allItems.push(...matchedItems);
         
         if (!result.has_more || !result.page_token) break;
         currentToken = result.page_token;
