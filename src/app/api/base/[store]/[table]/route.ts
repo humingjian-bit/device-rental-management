@@ -135,17 +135,11 @@ export async function GET(
     }
 
     // 处理高级搜索（精确匹配）
-    let advancedFilter: string | undefined = undefined;
-    if (searchMode === "exact" && searchField && searchValue) {
-      const fieldId = fieldNameToId[searchField];
-      if (fieldId) {
-        // 构建精确匹配filter - 飞书filter语法需要用OR()包裹
-        advancedFilter = `OR([${fieldId}].contains("${searchValue}"))`;
-      }
-    }
+    // 注意：由于飞书filter API有限制，现在改用后端过滤方式
+    // searchField 和 searchValue 会在下面代码中直接使用
 
     // 合并filter：优先使用高级搜索filter，其次使用传入的filter
-    const finalFilter = advancedFilter || filter;
+    const finalFilter = filter; // 不使用advancedFilter，改用后端过滤
 
     let allItems: Record<string, unknown>[] = [];
     let totalCount = 0;
@@ -153,37 +147,66 @@ export async function GET(
     let nextPageToken: string | undefined = undefined;
 
     // 搜索模式处理
-    if (searchMode === "exact") {
-      // 精确搜索：直接使用飞书filter，性能好
-      const result = await listBitableRecords(store.base_token, tableId, {
-        page_size: pageSize,
-        page_token: pageToken,
-        filter: finalFilter,
+    if (searchMode === "exact" && searchField && searchValue) {
+      // 精确搜索：获取数据后在代码中过滤（绕过飞书filter限制）
+      const MAX_TOTAL = 500;
+      let currentToken: string | undefined = undefined;
+      
+      // 先获取一页获取总数
+      const firstPage = await listBitableRecords(store.base_token, tableId, {
+        page_size: 1,
+        page_token: undefined,
+        filter: undefined,
         sort,
       });
+      totalCount = firstPage.total;
 
-      // 转换Lookup字段
-      allItems = result.items.map((item: Record<string, unknown>) => {
-        const processed: Record<string, unknown> = { ...item };
-        for (const mapping of lookupFieldMapping) {
-          const value = processed[mapping.lookupField];
-          if (Array.isArray(value) && value.length > 0 && typeof value[0] === "string" && (value[0] as string).startsWith("opt")) {
-            const options = deviceOptionsByFieldId[mapping.deviceFieldId];
-            if (options) {
-              const names = (value as string[]).map((id) => {
-                const opt = options.find((o) => o.id === id);
-                return opt ? opt.name : id;
-              });
-              processed[mapping.lookupField] = names;
+      // 获取数据用于过滤
+      while (allItems.length < MAX_TOTAL) {
+        const result = await listBitableRecords(store.base_token, tableId, {
+          page_size: 100,
+          page_token: currentToken,
+          filter: undefined,
+          sort,
+        });
+
+        // 转换Lookup字段
+        const processedItems = result.items.map((item: Record<string, unknown>) => {
+          const processed: Record<string, unknown> = { ...item };
+          for (const mapping of lookupFieldMapping) {
+            const value = processed[mapping.lookupField];
+            if (Array.isArray(value) && value.length > 0 && typeof value[0] === "string" && (value[0] as string).startsWith("opt")) {
+              const options = deviceOptionsByFieldId[mapping.deviceFieldId];
+              if (options) {
+                const names = (value as string[]).map((id) => {
+                  const opt = options.find((o) => o.id === id);
+                  return opt ? opt.name : id;
+                });
+                processed[mapping.lookupField] = names;
+              }
             }
           }
-        }
-        return processed;
-      });
+          return processed;
+        });
 
-      totalCount = result.total;
-      hasMore = result.has_more;
-      nextPageToken = result.page_token;
+        // 精确过滤
+        const matchedItems = processedItems.filter((item) => {
+          const fieldValue = String(item[searchField] || "");
+          return fieldValue === searchValue;
+        });
+
+        allItems.push(...matchedItems);
+        
+        if (!result.has_more || !result.page_token) break;
+        currentToken = result.page_token;
+      }
+      
+      // 如果匹配数量超过一页，只返回第一页
+      const pageItems = allItems.slice(0, pageSize);
+      totalCount = allItems.length;
+      hasMore = allItems.length > pageSize;
+      nextPageToken = hasMore ? "exact_page_2" : undefined;
+      allItems = pageItems;
     } else if (search) {
       // 模糊搜索：获取全部数据，后端过滤（只搜索3个关键字段）
       const MAX_TOTAL = 500; // 限制获取量，避免太慢
