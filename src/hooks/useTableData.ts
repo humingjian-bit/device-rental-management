@@ -59,8 +59,8 @@ export function useTableData(
   // 支持高级搜索（精确匹配）
   if (params?.advancedSearch?.field && params?.advancedSearch?.value) {
     searchParams.set("search_mode", "exact");
-    searchParams.set("search_field", params.advancedSearch.field);
-    searchParams.set("search_value", params.advancedSearch.value);
+    searchParams.set("search_field", encodeURIComponent(params.advancedSearch.field));
+    searchParams.set("search_value", encodeURIComponent(params.advancedSearch.value));
   }
 
   const url = `/api/base/${storeId}/${tableName}${searchParams.toString() ? "?" + searchParams.toString() : ""}`;

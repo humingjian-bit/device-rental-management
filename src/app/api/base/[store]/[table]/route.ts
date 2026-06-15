@@ -138,13 +138,9 @@ export async function GET(
     let advancedFilter: string | undefined = undefined;
     if (searchMode === "exact" && searchField && searchValue) {
       const fieldId = fieldNameToId[searchField];
-      console.log(`[高级搜索] searchField=${searchField}, fieldId=${fieldId}, searchValue=${searchValue}`);
       if (fieldId) {
         // 构建精确匹配filter - 使用飞书filter语法
         advancedFilter = `AND([${fieldId}].contains("${searchValue}"))`;
-        console.log(`[高级搜索] filter=${advancedFilter}`);
-      } else {
-        console.log(`[高级搜索] 警告：找不到字段 ${searchField} 的ID`);
       }
     }
 
