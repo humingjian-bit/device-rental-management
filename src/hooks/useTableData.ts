@@ -3,7 +3,7 @@
 import useSWR from "swr";
 import { useSearchParams } from "next/navigation";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
+const fetcher = (url: string) => fetch(url, { credentials: 'include' }).then((r) => r.json());
 
 export interface TableDataResult {
   items: Record<string, unknown>[];
