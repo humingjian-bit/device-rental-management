@@ -109,7 +109,9 @@ async function formatRecordAsync(
           const deviceTableId = store.tables.device;
           
           // 找到target_field对应的设备表字段
-          const targetDeviceField = deviceFields.find(f => f.field_id === field.property.target_field);
+          const targetDeviceField = field.property 
+            ? deviceFields.find(f => f.field_id === field.property.target_field)
+            : null;
           
           if (targetDeviceField) {
             // 构建前端期望的格式: [{text: "xxx", record_ids: ["recxxx"]}]
