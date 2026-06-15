@@ -211,8 +211,9 @@ export async function GET(
           return String(fieldValue) === searchValue;
         });
         
-        if (!result.has_more || !result.page_token) break;
         allItems = allItems.concat(matchedItems);
+        
+        if (!result.has_more || !result.page_token) break;
         currentToken = result.page_token;
       }
       
