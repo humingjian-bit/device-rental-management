@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { Box, Typography, Chip } from "@mui/material";
 import DataTable, { ColumnDef, displayValue } from "@/components/DataTable";
 import { useTableData, useTableFields } from "@/hooks/useTableData";
@@ -33,6 +33,21 @@ export default function OrderPage() {
   );
 
   const { fields } = useTableFields(storeId, TABLE_NAME);
+
+  // 修复：获取设备表字段定义，用于订单表Lookup字段显示
+  const { fields: deviceFields } = useTableFields(storeId, "device");
+  
+  // 提取设备表的"SN编码"选项，用于订单表Lookup字段显示
+  const extraOptions = useMemo(() => {
+    const options: { id: string; name: string }[] = [];
+    if (deviceFields) {
+      const snField = deviceFields.find((f) => f.field_name === "SN编码");
+      if (snField?.property?.options) {
+        options.push(...snField.property.options);
+      }
+    }
+    return options;
+  }, [deviceFields]);
 
   // P0-002修复：修正字段名，SN编码是lookup类型需要特殊处理
   // headerName使用飞书实际字段名，确保高级搜索正确匹配
@@ -190,6 +205,8 @@ export default function OrderPage() {
         emptyDisplay={EMPTY_STATUS_DISPLAY}
         // P1-006修复：传递字段定义用于映射 formula/lookup 选项ID
         fieldDefs={fields}
+        // 修复：传递设备表options用于订单表Lookup字段显示
+        extraOptions={extraOptions}
       />
     </Box>
   );
