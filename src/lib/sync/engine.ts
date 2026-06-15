@@ -169,7 +169,7 @@ export class SyncEngine {
       const batch = orderNos.slice(i, i + BATCH_SIZE);
 
       try {
-        const records = await searchBitableRecords(baseToken, orderTableId, {
+        const searchResult = await searchBitableRecords(baseToken, orderTableId, {
           filter: {
             conjunction: "or",
             conditions: batch.map((no) => ({
@@ -180,6 +180,8 @@ export class SyncEngine {
           },
           field_names: ["订单号", "SN编码（最最重要）"],
         });
+
+        const records = searchResult.items || [];
 
         for (const record of records) {
           const orderNo = record.fields?.["订单号"];
@@ -316,7 +318,7 @@ export class SyncEngine {
 
     try {
       // 通过 SN 编码查询库存记录
-      const inventoryRecords = await searchBitableRecords(store.base_token, store.tables.inventory, {
+      const inventorySearchResult = await searchBitableRecords(store.base_token, store.tables.inventory, {
         filter: {
           conjunction: "and",
           conditions: [
@@ -329,6 +331,8 @@ export class SyncEngine {
         },
         field_names: ["SN编码", "状态"],
       });
+
+      const inventoryRecords = inventorySearchResult.items || [];
 
       if (inventoryRecords.length === 0) {
         this.stats.skipped++;
@@ -373,7 +377,7 @@ export class SyncEngine {
   ): Promise<boolean> {
     try {
       // 查询该设备的所有订单，按实际发货日期排序
-      const records = await searchBitableRecords(store.base_token, store.tables.order, {
+      const searchResult = await searchBitableRecords(store.base_token, store.tables.order, {
         filter: {
           conjunction: "and",
           conditions: [
@@ -393,6 +397,8 @@ export class SyncEngine {
         ],
         page_size: 1,
       });
+
+      const records = searchResult.items || [];
 
       if (records.length === 0) {
         return true; // 没有其他订单，当前就是最新的
