@@ -14,6 +14,11 @@ export interface TableDataResult {
   mutate: () => void;
 }
 
+export interface AdvancedSearch {
+  field: string;  // 精确搜索字段名
+  value: string;   // 精确搜索值
+}
+
 /**
  * 通用表格数据 hook
  * @param storeId 店铺ID
@@ -28,8 +33,8 @@ export function useTableData(
     page_token?: string;
     filter?: string;
     sort?: string;
-    search?: string;  // 新增：全局搜索关键字
-    searchFields?: string[];  // 新增：搜索的字段列表
+    search?: string;  // 模糊搜索关键字
+    advancedSearch?: AdvancedSearch;  // 高级搜索（精确匹配）
   }
 ): TableDataResult {
   // P1-001修复：storeId为空时返回默认状态，避免发送无效请求
@@ -51,7 +56,12 @@ export function useTableData(
   if (params?.sort) searchParams.set("sort", params.sort);
   // 支持全局搜索参数
   if (params?.search) searchParams.set("search", params.search);
-  if (params?.searchFields) searchParams.set("searchFields", params.searchFields.join(","));
+  // 支持高级搜索（精确匹配）
+  if (params?.advancedSearch?.field && params?.advancedSearch?.value) {
+    searchParams.set("search_mode", "exact");
+    searchParams.set("search_field", params.advancedSearch.field);
+    searchParams.set("search_value", params.advancedSearch.value);
+  }
 
   const url = `/api/base/${storeId}/${tableName}${searchParams.toString() ? "?" + searchParams.toString() : ""}`;
 

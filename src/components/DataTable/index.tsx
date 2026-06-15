@@ -32,6 +32,8 @@ import {
   Refresh as RefreshIcon,
   Search as SearchIcon,
   Clear as ClearIcon,
+  ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon,
 } from "@mui/icons-material";
 
 export interface FieldDef {
@@ -63,7 +65,8 @@ interface DataTableProps {
   hasMore: boolean;
   onPageChange: (pageToken?: string) => void;
   onRefresh: () => void;
-  onSearch?: (keyword: string) => void;  // 搜索回调
+  onSearch?: (keyword: string) => void;  // 模糊搜索回调
+  onAdvancedSearch?: (field: string, value: string) => void;  // 高级搜索回调（精确匹配）
   onCreate?: (fields: Record<string, unknown>) => Promise<void>;
   onUpdate?: (recordId: string, fields: Record<string, unknown>, currentRow?: Record<string, unknown>) => Promise<void>;
   pageSize?: number;
@@ -271,6 +274,7 @@ export default function DataTable({
   onPageChange,
   onRefresh,
   onSearch,
+  onAdvancedSearch,
   onCreate,
   onUpdate,
   pageSize = 20,
@@ -280,6 +284,9 @@ export default function DataTable({
 }: DataTableProps) {
   const [searchText, setSearchText] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [advancedSearchOpen, setAdvancedSearchOpen] = useState(false);  // 高级搜索展开状态
+  const [advancedField, setAdvancedField] = useState("");  // 高级搜索字段
+  const [advancedValue, setAdvancedValue] = useState("");  // 高级搜索值
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editRecord, setEditRecord] = useState<Record<string, unknown> | null>(null);
   const [editFields, setEditFields] = useState<Record<string, unknown>>({});
@@ -304,6 +311,29 @@ export default function DataTable({
       onSearch("");
     }
   };
+
+  // 高级搜索
+  const handleAdvancedSearch = () => {
+    if (onAdvancedSearch && advancedField && advancedValue) {
+      // 清除模糊搜索
+      setSearchText("");
+      if (onSearch) {
+        onSearch("");
+      }
+      // 触发高级搜索
+      onAdvancedSearch(advancedField, advancedValue);
+    }
+  };
+
+  const handleClearAdvancedSearch = () => {
+    setAdvancedField("");
+    setAdvancedValue("");
+    // 刷新数据（不带高级搜索条件）
+    onRefresh();
+  };
+
+  // 获取可搜索的字段列表（从columns中提取）
+  const searchableFields = columns.map(col => col.field_name || col.field);
 
   const handleEdit = useCallback((row: Record<string, unknown>) => {
     setEditRecord(row);
@@ -365,26 +395,82 @@ export default function DataTable({
   return (
     <Box>
       {/* 工具栏 */}
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
-        <Box sx={{ display: "flex", alignItems: "center", width: 300, position: "relative" }}>
-          <TextField
-            size="small"
-            placeholder="输入关键字搜索..."
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-            sx={{ width: "100%" }}
-            InputProps={{
-              startAdornment: <SearchIcon sx={{ color: "action.active", mr: 1 }} />,
-              endAdornment: searchText && (
-                <IconButton size="small" onClick={handleClearSearch}>
-                  <ClearIcon fontSize="small" />
-                </IconButton>
-              ),
-            }}
-          />
-          {debouncedSearch && (
-            <Typography variant="caption" sx={{ position: "absolute", right: 8, bottom: -18, color: "text.secondary" }}>
-              共 {total} 条记录
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 2 }}>
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+          {/* 模糊搜索行 */}
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <TextField
+              size="small"
+              placeholder="搜索 SN/设备/分类..."
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              sx={{ width: 250 }}
+              InputProps={{
+                startAdornment: <SearchIcon sx={{ color: "action.active", mr: 1 }} />,
+                endAdornment: searchText && (
+                  <IconButton size="small" onClick={handleClearSearch}>
+                    <ClearIcon fontSize="small" />
+                  </IconButton>
+                ),
+              }}
+            />
+            <Button
+              size="small"
+              variant="text"
+              endIcon={advancedSearchOpen ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+              onClick={() => setAdvancedSearchOpen(!advancedSearchOpen)}
+              sx={{ color: "text.secondary" }}
+            >
+              高级
+            </Button>
+          </Box>
+          {/* 高级搜索面板（可折叠） */}
+          {advancedSearchOpen && (
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <FormControl size="small" sx={{ minWidth: 150 }}>
+                <InputLabel>字段</InputLabel>
+                <Select
+                  value={advancedField}
+                  label="字段"
+                  onChange={(e) => setAdvancedField(e.target.value)}
+                >
+                  {searchableFields.map((field) => (
+                    <MenuItem key={field} value={field}>{field}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <TextField
+                size="small"
+                placeholder="精确值"
+                value={advancedValue}
+                onChange={(e) => setAdvancedValue(e.target.value)}
+                sx={{ width: 180 }}
+              />
+              <Button
+                size="small"
+                variant="contained"
+                onClick={handleAdvancedSearch}
+                disabled={!advancedField || !advancedValue}
+              >
+                搜索
+              </Button>
+              {(advancedField || advancedValue) && (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={handleClearAdvancedSearch}
+                >
+                  清除
+                </Button>
+              )}
+            </Box>
+          )}
+          {/* 搜索结果提示 */}
+          {(debouncedSearch || advancedField || advancedValue) && (
+            <Typography variant="caption" sx={{ color: "text.secondary" }}>
+              {advancedField && advancedValue
+                ? `高级搜索 [${advancedField} = "${advancedValue}"]，共 ${total} 条`
+                : `共 ${total} 条记录`}
             </Typography>
           )}
         </Box>

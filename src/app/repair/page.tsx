@@ -24,11 +24,12 @@ export default function RepairPage() {
   const { storeId } = useCurrentStore();
   const [pageToken, setPageToken] = useState<string | undefined>(undefined);
   const [searchKeyword, setSearchKeyword] = useState("");
+  const [advancedSearch, setAdvancedSearch] = useState<{ field: string; value: string } | undefined>(undefined);
   
   const { items, total, has_more, isLoading, error, mutate, page_token } = useTableData(
     storeId,
     TABLE_NAME,
-    { page_size: 20, page_token: pageToken, search: searchKeyword }
+    { page_size: 20, page_token: pageToken, search: advancedSearch ? undefined : searchKeyword, advancedSearch }
   );
 
   const { fields } = useTableFields(storeId, TABLE_NAME);
@@ -92,6 +93,14 @@ export default function RepairPage() {
   // 搜索处理：清空分页，重新搜索
   const handleSearch = useCallback((keyword: string) => {
     setSearchKeyword(keyword);
+    setAdvancedSearch(undefined); // 清除高级搜索
+    setPageToken(undefined); // 重置分页
+  }, []);
+
+  // 高级搜索处理
+  const handleAdvancedSearch = useCallback((field: string, value: string) => {
+    setAdvancedSearch({ field, value });
+    setSearchKeyword(""); // 清除模糊搜索
     setPageToken(undefined); // 重置分页
   }, []);
 
@@ -111,6 +120,7 @@ export default function RepairPage() {
         onPageChange={() => setPageToken(page_token)}
         onRefresh={() => mutate()}
         onSearch={handleSearch}
+        onAdvancedSearch={handleAdvancedSearch}
         onCreate={handleCreate}
         onUpdate={handleUpdate}
         emptyDisplay="-"
