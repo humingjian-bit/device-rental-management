@@ -333,7 +333,7 @@ export default function DataTable({
   };
 
   // 获取可搜索的字段列表（从columns中提取）
-  const searchableFields = columns.map(col => col.headerName);
+  const searchableFields = columns.map(col => ({ display: col.headerName, value: col.field }));
 
   const handleEdit = useCallback((row: Record<string, unknown>) => {
     setEditRecord(row);
@@ -434,8 +434,8 @@ export default function DataTable({
                   label="字段"
                   onChange={(e) => setAdvancedField(e.target.value)}
                 >
-                  {searchableFields.map((field) => (
-                    <MenuItem key={field} value={field}>{field}</MenuItem>
+                  {searchableFields.map((item) => (
+                    <MenuItem key={item.value} value={item.value}>{item.display}</MenuItem>
                   ))}
                 </Select>
               </FormControl>
