@@ -103,7 +103,7 @@ export class RenrenzuParser {
     const shipDate = this.parseDate(shipDateStr);
 
     // 计算归还日期（预估）：发货日期 + 租期 + 3天缓冲
-    const estimatedReturnDate = new Date(shipDate);
+    const estimatedReturnDate = new Date(shipDate || Date.now());
     estimatedReturnDate.setDate(estimatedReturnDate.getDate() + rentalDays + 3);
 
     // 计算实际发货日期
