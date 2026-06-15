@@ -139,8 +139,8 @@ export async function GET(
     if (searchMode === "exact" && searchField && searchValue) {
       const fieldId = fieldNameToId[searchField];
       if (fieldId) {
-        // 构建精确匹配filter
-        advancedFilter = `AND(CurrentValue.[${fieldId}].contains("${searchValue}"))`;
+        // 构建精确匹配filter - 使用飞书filter语法
+        advancedFilter = `[${fieldId}].contains("${searchValue}")`;
       }
     }
 
