@@ -14,7 +14,7 @@ const inventoryColumns: ColumnDef[] = [
   { field: "SN编码", headerName: "SN编码", width: 150, editable: false },
   { field: "设备型号", headerName: "设备型号", width: 150, editable: false },
   { field: "分类", headerName: "分类", width: 120, editable: false },
-  { field: "状态", headerName: "库存状态", width: 150, type: "select" },
+  { field: "状态", headerName: "状态", width: 150, type: "select" },
 ];
 
 // 库存状态编辑时可选项（过滤掉不相关选项）

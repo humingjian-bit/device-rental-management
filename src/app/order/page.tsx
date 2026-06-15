@@ -37,12 +37,12 @@ export default function OrderPage() {
   // P0-002修复：修正字段名，SN编码是lookup类型需要特殊处理
   const orderColumns: ColumnDef[] = [
     { field: "订单号", headerName: "订单号", width: 150, editable: false },
-    { field: "SN编码（最最重要）", headerName: "SN编码", width: 150, editable: false },
-    { field: "租机型号", headerName: "设备型号", width: 150, editable: false },
-    { field: "发货平台", headerName: "平台", width: 100, type: "select" },
+    { field: "SN编码（最最重要）", headerName: "SN编码（最最重要）", width: 150, editable: false },
+    { field: "租机型号", headerName: "租机型号", width: 150, editable: false },
+    { field: "发货平台", headerName: "发货平台", width: 100, type: "select" },
     {
       field: "状态",
-      headerName: "订单状态",
+      headerName: "状态",
       width: 120,
       type: "select",
       render: (value) => {
@@ -58,9 +58,9 @@ export default function OrderPage() {
         return <Chip label={text} size="small" color={color} variant="outlined" />;
       },
     },
-    { field: "发货日期", headerName: "租期开始", width: 120, type: "date" },
-    { field: "归还日期（预估）", headerName: "租期结束", width: 120, type: "date" },
-    { field: "租金", headerName: "日租金", width: 100, type: "number" },
+    { field: "发货日期", headerName: "发货日期", width: 120, type: "date" },
+    { field: "归还日期（预估）", headerName: "归还日期（预估）", width: 120, type: "date" },
+    { field: "租金", headerName: "租金", width: 100, type: "number" },
     { field: "备注", headerName: "备注", width: 200 },
   ];
 

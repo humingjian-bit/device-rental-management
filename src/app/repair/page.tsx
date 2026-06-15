@@ -12,11 +12,11 @@ const TABLE_NAME = "repair";
 // 维修管理表列定义
 const repairColumns: ColumnDef[] = [
   { field: "SN编码", headerName: "SN编码", width: 150, editable: false },
-  { field: "型号", headerName: "设备型号", width: 150, editable: false },
-  { field: "故障描述", headerName: "维修原因", width: 200 },
-  { field: "维修价格", headerName: "维修费用", width: 100, type: "number" },
+  { field: "型号", headerName: "型号", width: 150, editable: false },
+  { field: "故障描述", headerName: "故障描述", width: 200 },
+  { field: "维修价格", headerName: "维修价格", width: 100, type: "number" },
   { field: "送修日期", headerName: "送修日期", width: 120, type: "date" },
-  { field: "维修返日期", headerName: "预计归还", width: 120, type: "date" },
+  { field: "维修返日期", headerName: "维修返日期", width: 120, type: "date" },
   { field: "备注", headerName: "备注", width: 200 },
 ];
 
