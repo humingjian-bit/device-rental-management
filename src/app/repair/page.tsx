@@ -9,7 +9,7 @@ import { useCurrentStore } from "@/hooks/useStore";
 const TABLE_NAME = "repair";
 
 // P0-004修复：修正字段名，删除不存在的列（维修状态）
-// 维修管理表列定义
+// 维修管理表列定义，headerName使用飞书实际字段名
 const repairColumns: ColumnDef[] = [
   { field: "SN编码", headerName: "SN编码", width: 150, editable: false },
   { field: "型号", headerName: "型号", width: 150, editable: false },

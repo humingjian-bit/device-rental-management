@@ -194,10 +194,6 @@ export async function GET(
 
         // 精确过滤 - 支持多种字段类型
         const matchedItems = processedItems.filter((item) => {
-          // 调试
-          if (allItems.length < 10) {
-            console.log(`[过滤] searchField=${searchField}, item["租金"]=${item["租金"]}, 类型=${typeof item["租金"]}`);
-          }
           const fieldValue = item[searchField];
           // 处理空值
           if (fieldValue === null || fieldValue === undefined || fieldValue === "") {

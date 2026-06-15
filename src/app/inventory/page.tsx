@@ -9,7 +9,7 @@ import { useCurrentStore } from "@/hooks/useStore";
 const TABLE_NAME = "inventory";
 
 // P0-003修复：删除不存在的列（所在仓库、更新时间），修正库存状态为状态
-// 库存状态表列定义
+// 库存状态表列定义，headerName使用飞书实际字段名
 const inventoryColumns: ColumnDef[] = [
   { field: "SN编码", headerName: "SN编码", width: 150, editable: false },
   { field: "设备型号", headerName: "设备型号", width: 150, editable: false },

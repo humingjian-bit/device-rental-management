@@ -35,6 +35,7 @@ export default function OrderPage() {
   const { fields } = useTableFields(storeId, TABLE_NAME);
 
   // P0-002修复：修正字段名，SN编码是lookup类型需要特殊处理
+  // headerName使用飞书实际字段名，确保高级搜索正确匹配
   const orderColumns: ColumnDef[] = [
     { field: "订单号", headerName: "订单号", width: 150, editable: false },
     { field: "SN编码（最最重要）", headerName: "SN编码（最最重要）", width: 150, editable: false },
