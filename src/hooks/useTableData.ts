@@ -1,6 +1,7 @@
 "use client";
 
 import useSWR from "swr";
+import { useSearchParams } from "next/navigation";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -62,6 +63,12 @@ export function useTableData(
     searchParams.set("search_mode", "exact");
     searchParams.set("search_field", params.advancedSearch.field);
     searchParams.set("search_value", params.advancedSearch.value);
+  }
+
+  // 添加访问token参数（从URL获取k参数）
+  const accessToken = typeof window !== 'undefined' ? new URL(window.location.href).searchParams.get("k") : null;
+  if (accessToken) {
+    searchParams.set("k", accessToken);
   }
 
   const url = `/api/base/${storeId}/${tableName}${searchParams.toString() ? "?" + searchParams.toString() : ""}`;
