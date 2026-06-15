@@ -194,20 +194,37 @@ export async function GET(
           sort,
         });
 
-        // 转换Lookup字段
+        // 转换Lookup字段（处理search API返回的格式）
         allItems = searchResult.items.map((item: Record<string, unknown>) => {
           const processed: Record<string, unknown> = { ...item };
           for (const mapping of lookupFieldMapping) {
             const value = processed[mapping.lookupField];
-            if (Array.isArray(value) && value.length > 0 && typeof value[0] === "string" && (value[0] as string).startsWith("opt")) {
-              const options = deviceOptionsByFieldId[mapping.deviceFieldId];
-              if (options) {
-                const names = (value as string[]).map((id) => {
-                  const opt = options.find((o) => o.id === id);
-                  return opt ? opt.name : id;
-                });
-                processed[mapping.lookupField] = names;
+            // search API返回格式: {type:3, value:["Pocket3"]} 或 数组
+            let displayValue: string | string[] = [];
+            
+            if (Array.isArray(value)) {
+              // 数组格式：["Pocket3"] 或 ["opt_xxx"]
+              displayValue = value as string[];
+            } else if (value && typeof value === 'object') {
+              // 新格式：{type:3, value:["Pocket3"]}
+              const lookupObj = value as { type?: number; value?: string[] };
+              if (lookupObj.value) {
+                displayValue = lookupObj.value;
               }
+            }
+            
+            if (displayValue.length > 0) {
+              // 如果是option ID数组，转换为名称
+              if (typeof displayValue[0] === 'string' && (displayValue[0] as string).startsWith("opt")) {
+                const options = deviceOptionsByFieldId[mapping.deviceFieldId];
+                if (options) {
+                  displayValue = (displayValue as string[]).map((id) => {
+                    const opt = options.find((o) => o.id === id);
+                    return opt ? opt.name : id;
+                  });
+                }
+              }
+              processed[mapping.lookupField] = displayValue;
             }
           }
           return processed;
@@ -235,15 +252,28 @@ export async function GET(
             const processed: Record<string, unknown> = { ...item };
             for (const mapping of lookupFieldMapping) {
               const value = processed[mapping.lookupField];
-              if (Array.isArray(value) && value.length > 0 && typeof value[0] === "string" && (value[0] as string).startsWith("opt")) {
-                const options = deviceOptionsByFieldId[mapping.deviceFieldId];
-                if (options) {
-                  const names = (value as string[]).map((id) => {
-                    const opt = options.find((o) => o.id === id);
-                    return opt ? opt.name : id;
-                  });
-                  processed[mapping.lookupField] = names;
+              let displayValue: string | string[] = [];
+              
+              if (Array.isArray(value)) {
+                displayValue = value as string[];
+              } else if (value && typeof value === 'object') {
+                const lookupObj = value as { type?: number; value?: string[] };
+                if (lookupObj.value) {
+                  displayValue = lookupObj.value;
                 }
+              }
+              
+              if (displayValue.length > 0) {
+                if (typeof displayValue[0] === 'string' && (displayValue[0] as string).startsWith("opt")) {
+                  const options = deviceOptionsByFieldId[mapping.deviceFieldId];
+                  if (options) {
+                    displayValue = (displayValue as string[]).map((id) => {
+                      const opt = options.find((o) => o.id === id);
+                      return opt ? opt.name : id;
+                    });
+                  }
+                }
+                processed[mapping.lookupField] = displayValue;
               }
             }
             return processed;
@@ -342,15 +372,28 @@ export async function GET(
             const processed: Record<string, unknown> = { ...item };
             for (const mapping of lookupFieldMapping) {
               const value = processed[mapping.lookupField];
-              if (Array.isArray(value) && value.length > 0 && typeof value[0] === "string" && (value[0] as string).startsWith("opt")) {
-                const options = deviceOptionsByFieldId[mapping.deviceFieldId];
-                if (options) {
-                  const names = (value as string[]).map((id) => {
-                    const opt = options.find((o) => o.id === id);
-                    return opt ? opt.name : id;
-                  });
-                  processed[mapping.lookupField] = names;
+              let displayValue: string | string[] = [];
+              
+              if (Array.isArray(value)) {
+                displayValue = value as string[];
+              } else if (value && typeof value === 'object') {
+                const lookupObj = value as { type?: number; value?: string[] };
+                if (lookupObj.value) {
+                  displayValue = lookupObj.value;
                 }
+              }
+              
+              if (displayValue.length > 0) {
+                if (typeof displayValue[0] === 'string' && (displayValue[0] as string).startsWith("opt")) {
+                  const options = deviceOptionsByFieldId[mapping.deviceFieldId];
+                  if (options) {
+                    displayValue = (displayValue as string[]).map((id) => {
+                      const opt = options.find((o) => o.id === id);
+                      return opt ? opt.name : id;
+                    });
+                  }
+                }
+                processed[mapping.lookupField] = displayValue;
               }
             }
             return processed;

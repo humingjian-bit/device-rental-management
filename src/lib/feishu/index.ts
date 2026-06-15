@@ -343,7 +343,7 @@ export async function searchBitableRecords(
   if (params.field_names) body.field_names = params.field_names;
 
   const res = await fetch(
-    `${FEISHU_API_BASE}/bitable/v1/apps/${appToken}/tables/${tableId}/records/search?page_size=${params.page_size || 20}`,
+    `${FEISHU_API_BASE}/bitable/v1/apps/${appToken}/tables/${tableId}/records/search`,
     {
       method: "POST",
       headers: {
