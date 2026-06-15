@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getStoreConfig } from "@/lib/config";
 import {
   listBitableRecords,
+  searchBitableRecords,
   getBitableRecord,
   createBitableRecord,
   updateBitableRecord,
@@ -151,30 +152,50 @@ export async function GET(
 
     // 搜索模式处理
     if (searchMode === "exact" && searchField && searchValue) {
-      // 精确搜索：获取数据后在代码中过滤（绕过飞书filter限制）
-      const MAX_TOTAL = 500;
-      let currentToken: string | undefined = undefined;
+      // 精确搜索：使用飞书原生search API进行服务端筛选
+      // 根据字段类型选择合适的操作符
+      const fieldDef = fields.find(f => f.field_name === searchField);
+      let operator = "contains"; // 默认使用contains
       
-      // 先获取一页获取总数
-      const firstPage = await listBitableRecords(store.base_token, tableId, {
-        page_size: 1,
-        page_token: undefined,
-        filter: undefined,
-        sort,
-      });
-      totalCount = firstPage.total;
+      if (fieldDef) {
+        // 数字字段使用 is 操作符
+        if (fieldDef.type === 1 || fieldDef.ui_type === "Number") {
+          operator = "is";
+        }
+        // 多选字段使用 contains
+        else if (fieldDef.ui_type === "MultipleSelect" || fieldDef.ui_type === "Checkbox") {
+          operator = "contains";
+        }
+        // 单选字段可以使用 is
+        else if (fieldDef.ui_type === "SingleSelect" || fieldDef.ui_type === "Radio") {
+          operator = "is";
+        }
+        // 文本字段使用 contains
+        else {
+          operator = "contains";
+        }
+      }
 
-      // 获取数据用于过滤
-      while (allItems.length < MAX_TOTAL) {
-        const result = await listBitableRecords(store.base_token, tableId, {
-          page_size: 100,
-          page_token: currentToken,
-          filter: undefined,
+      try {
+        // 优先使用飞书search API（服务端筛选）
+        const searchResult = await searchBitableRecords(store.base_token, tableId, {
+          filter: {
+            conjunction: "and",
+            conditions: [
+              {
+                field_name: searchField,
+                operator: operator,
+                value: [searchValue],
+              },
+            ],
+          },
+          page_size: pageSize,
+          page_token: pageToken,
           sort,
         });
 
         // 转换Lookup字段
-        const processedItems = result.items.map((item: Record<string, unknown>) => {
+        allItems = searchResult.items.map((item: Record<string, unknown>) => {
           const processed: Record<string, unknown> = { ...item };
           for (const mapping of lookupFieldMapping) {
             const value = processed[mapping.lookupField];
@@ -192,33 +213,65 @@ export async function GET(
           return processed;
         });
 
-        // 精确过滤 - 支持多种字段类型
-        const matchedItems = processedItems.filter((item) => {
-          const fieldValue = item[searchField];
-          // 处理空值
-          if (fieldValue === null || fieldValue === undefined || fieldValue === "") {
-            return searchValue === "";
-          }
-          // 如果是数组（如多选），检查数组中是否有匹配项
-          if (Array.isArray(fieldValue)) {
-            return fieldValue.some(v => String(v) === searchValue);
-          }
-          // 其他类型转字符串比较
-          return String(fieldValue) === searchValue;
-        });
+        totalCount = searchResult.total;
+        hasMore = searchResult.has_more;
+        nextPageToken = searchResult.page_token;
+      } catch (searchError) {
+        console.error(`[搜索] 飞书search API失败，回退到后端过滤: ${searchError}`);
         
-        allItems = allItems.concat(matchedItems);
-        
-        if (!result.has_more || !result.page_token) break;
-        currentToken = result.page_token;
+        // 回退方案：获取全部数据后端过滤
+        const MAX_TOTAL = 500;
+        let currentToken: string | undefined = undefined;
+
+        while (allItems.length < MAX_TOTAL) {
+          const result = await listBitableRecords(store.base_token, tableId, {
+            page_size: 100,
+            page_token: currentToken,
+            filter: undefined,
+            sort,
+          });
+
+          const processedItems = result.items.map((item: Record<string, unknown>) => {
+            const processed: Record<string, unknown> = { ...item };
+            for (const mapping of lookupFieldMapping) {
+              const value = processed[mapping.lookupField];
+              if (Array.isArray(value) && value.length > 0 && typeof value[0] === "string" && (value[0] as string).startsWith("opt")) {
+                const options = deviceOptionsByFieldId[mapping.deviceFieldId];
+                if (options) {
+                  const names = (value as string[]).map((id) => {
+                    const opt = options.find((o) => o.id === id);
+                    return opt ? opt.name : id;
+                  });
+                  processed[mapping.lookupField] = names;
+                }
+              }
+            }
+            return processed;
+          });
+
+          const matchedItems = processedItems.filter((item) => {
+            const fieldValue = item[searchField];
+            if (fieldValue === null || fieldValue === undefined || fieldValue === "") {
+              return searchValue === "";
+            }
+            if (Array.isArray(fieldValue)) {
+              return fieldValue.some(v => String(v) === searchValue);
+            }
+            return String(fieldValue) === searchValue;
+          });
+
+          allItems = allItems.concat(matchedItems);
+
+          if (!result.has_more || !result.page_token) break;
+          currentToken = result.page_token;
+        }
+
+        totalCount = allItems.length;
+        const pageItems = allItems.slice(0, pageSize);
+        hasMore = allItems.length > pageSize;
+        nextPageToken = hasMore ? "exact_page_2" : undefined;
+        allItems = pageItems;
       }
-      
-      // 如果匹配数量超过一页，只返回第一页
-      const pageItems = allItems.slice(0, pageSize);
-      totalCount = allItems.length;
-      hasMore = allItems.length > pageSize;
-      nextPageToken = hasMore ? "exact_page_2" : undefined;
-      allItems = pageItems;
     } else if (search) {
       // 模糊搜索：获取全部数据，后端过滤（只搜索3个关键字段）
       const MAX_TOTAL = 500; // 限制获取量，避免太慢

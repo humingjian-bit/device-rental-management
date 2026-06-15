@@ -305,6 +305,74 @@ export async function batchCreateBitableRecords(
 }
 
 /**
+ * 搜索多维表记录（支持服务端过滤）
+ * 使用飞书原生的search API，支持精确筛选
+ */
+export async function searchBitableRecords(
+  appToken: string,
+  tableId: string,
+  params: {
+    filter?: {
+      conjunction: string;
+      conditions: Array<{
+        field_name: string;
+        operator: string;
+        value: unknown[];
+      }>;
+    };
+    page_size?: number;
+    page_token?: string;
+    sort?: string;
+    field_names?: string[];
+  },
+  tokenType: "tenant" | "user" = "tenant"
+): Promise<{
+  items: Record<string, unknown>[];
+  total: number;
+  has_more: boolean;
+  page_token?: string;
+}> {
+  const accessToken =
+    tokenType === "tenant" ? await getTenantAccessToken() : "";
+
+  const body: Record<string, unknown> = {};
+  if (params.filter) body.filter = params.filter;
+  if (params.page_size) body.page_size = params.page_size;
+  if (params.page_token) body.page_token = params.page_token;
+  if (params.sort) body.sort = params.sort;
+  if (params.field_names) body.field_names = params.field_names;
+
+  const res = await fetch(
+    `${FEISHU_API_BASE}/bitable/v1/apps/${appToken}/tables/${tableId}/records/search?page_size=${params.page_size || 20}`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    }
+  );
+
+  const data = await res.json();
+  if (data.code !== 0) {
+    throw new Error(`Failed to search records: ${data.msg}`);
+  }
+
+  return {
+    items: (data.data?.items || []).map(
+      (item: { fields?: Record<string, unknown>; record_id?: string }) => ({
+        ...item.fields,
+        _record_id: item.record_id,
+      })
+    ),
+    total: data.data?.total || 0,
+    has_more: data.data?.has_more || false,
+    page_token: data.data?.page_token,
+  };
+}
+
+/**
  * 获取多维表字段定义
  */
 export async function listBitableFields(
