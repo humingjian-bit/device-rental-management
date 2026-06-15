@@ -82,6 +82,75 @@ function formatFieldValue(value: unknown, fieldDef?: FieldDef, optionsMap?: Reco
 
 /**
  * 统一格式化记录的所有字段
+ * 特别处理lookup字段，获取关联记录的实际值
+ */
+async function formatRecordAsync(
+  record: Record<string, unknown>,
+  fields: FieldDef[],
+  store: { base_token: string; tables: Record<string, string> },
+  deviceOptionsByFieldId: Record<string, { id: string; name: string }[]>,
+  deviceFields: FieldDef[]
+): Promise<Record<string, unknown>> {
+  const formatted: Record<string, unknown> = { ...record };
+  
+  // 找到所有Lookup字段及其关联的设备表字段
+  for (const field of fields) {
+    if (field.type === 19 && field.property?.target_field) {
+      // 这是一个lookup字段
+      const value = formatted[field.field_name];
+      if (value && typeof value === 'object' && 'link_record_ids' in value) {
+        const linkValue = value as { link_record_ids?: string[] };
+        const recordIds = linkValue.link_record_ids || [];
+        
+        if (recordIds.length > 0) {
+          // 找到关联的设备表
+          // 需要根据target_field找到对应的设备表
+          // 通常lookup是关联到设备表tblVxflMiJ59wI51
+          const deviceTableId = store.tables.device;
+          
+          // 找到target_field对应的设备表字段
+          const targetDeviceField = deviceFields.find(f => f.field_id === field.property.target_field);
+          
+          if (targetDeviceField) {
+            // 获取关联记录的实际值
+            const displayValues: string[] = [];
+            for (const recordId of recordIds) {
+              try {
+                const linkedRecord = await getBitableRecord(store.base_token, deviceTableId, recordId);
+                const fieldsData = linkedRecord.fields as Record<string, unknown>;
+                const displayValue = fieldsData[targetDeviceField.field_name];
+                if (displayValue !== null && displayValue !== undefined) {
+                  // 格式化显示值
+                  if (Array.isArray(displayValue)) {
+                    displayValues.push(...displayValue.map(v => String(v)));
+                  } else {
+                    displayValues.push(String(displayValue));
+                  }
+                }
+              } catch (e) {
+                console.error(`[lookup] 获取关联记录失败: ${recordId}`, e);
+              }
+            }
+            formatted[field.field_name] = displayValues;
+          }
+        } else {
+          formatted[field.field_name] = [];
+        }
+      }
+    } else {
+      // 非lookup字段，使用原有格式化逻辑
+      const value = formatted[field.field_name];
+      if (value !== null && value !== undefined) {
+        formatted[field.field_name] = formatFieldValue(value, field, deviceOptionsByFieldId);
+      }
+    }
+  }
+  
+  return formatted;
+}
+
+/**
+ * 同步版本的formatRecord，用于不需要lookup处理的场景
  */
 function formatRecord(record: Record<string, unknown>, fields: FieldDef[], optionsMap?: Record<string, { id: string; name: string }[]>): Record<string, unknown> {
   const formatted: Record<string, unknown> = { ...record };
@@ -267,9 +336,12 @@ export async function GET(
           sort,
         });
 
-        // 使用统一格式化函数处理所有字段
-        allItems = searchResult.items.map((item: Record<string, unknown>) => 
-          formatRecord(item, fields, deviceOptionsByFieldId)
+        // 使用异步格式化函数处理所有字段（包括lookup）
+        const storeConfig = { base_token: store.base_token, tables: store.tables };
+        allItems = await Promise.all(
+          searchResult.items.map((item: Record<string, unknown>) => 
+            formatRecordAsync(item, fields, storeConfig, deviceOptionsByFieldId, deviceFields)
+          )
         );
 
         totalCount = searchResult.total;
@@ -411,11 +483,13 @@ export async function GET(
         sort,
       });
 
-      // 使用统一格式化函数处理所有字段
-      allItems = result.items.map((item: Record<string, unknown>) => 
-        formatRecord(item, fields, deviceOptionsByFieldId)
+      // 使用异步格式化函数处理所有字段（包括lookup）
+      const storeConfig = { base_token: store.base_token, tables: store.tables };
+      allItems = await Promise.all(
+        result.items.map((item: Record<string, unknown>) => 
+          formatRecordAsync(item, fields, storeConfig, deviceOptionsByFieldId, deviceFields)
+        )
       );
-      });
 
       totalCount = result.total;
       hasMore = result.has_more;
