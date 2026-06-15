@@ -112,26 +112,32 @@ async function formatRecordAsync(
           const targetDeviceField = deviceFields.find(f => f.field_id === field.property.target_field);
           
           if (targetDeviceField) {
-            // 获取关联记录的实际值
-            const displayValues: string[] = [];
+            // 构建前端期望的格式: [{text: "xxx", record_ids: ["recxxx"]}]
+            const displayItems: Array<{ text: string; record_ids: string[] }> = [];
             for (const recordId of recordIds) {
               try {
                 // getBitableRecord返回的是fields的展开，不需要再访问.fields
                 const linkedRecord = await getBitableRecord(store.base_token, deviceTableId, recordId);
                 const displayValue = linkedRecord[targetDeviceField.field_name];
+                let text = "";
                 if (displayValue !== null && displayValue !== undefined) {
-                  // 格式化显示值
                   if (Array.isArray(displayValue)) {
-                    displayValues.push(...displayValue.map(v => String(v)));
+                    text = displayValue.map(v => String(v)).join(", ");
                   } else {
-                    displayValues.push(String(displayValue));
+                    text = String(displayValue);
                   }
                 }
+                displayItems.push({ text, record_ids: [recordId] });
               } catch (e) {
                 console.error(`[lookup] 获取关联记录失败: ${recordId}`, e);
+                // 即使失败也保留record_id
+                displayItems.push({ text: recordId, record_ids: [recordId] });
               }
             }
-            formatted[field.field_name] = displayValues;
+            formatted[field.field_name] = displayItems;
+          } else {
+            // 没有找到target字段，保留原始格式
+            formatted[field.field_name] = { link_record_ids: recordIds };
           }
         } else {
           formatted[field.field_name] = [];
