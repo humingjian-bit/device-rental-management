@@ -1,6 +1,7 @@
 /**
  * 人人租 CSV 解析器
  * 格式：GBK 编码 CSV
+ * 参考 Python 原版逻辑实现
  */
 
 import { SyncOrder } from "../sync/types";
@@ -90,11 +91,17 @@ export class RenrenzuParser {
       return null;
     }
 
+    // 获取各字段原始值
     const status = cols[colMap["订单状态"]] || "";
-    const rentalDays = parseInt(cols[colMap["租期数"]] || cols[colMap["租期"]] || "0", 10);
+    const rentalPeriod = cols[colMap["租期"]] || "";
+    const renewalPeriod = cols[colMap["续租租期"]] || "";
+
+    // 租期天数：从"租期数"列提取数字（可能有"天"字）
+    const rentalDaysStr = cols[colMap["租期数"]] || "";
+    const rentalDays = this.extractNumber(rentalDaysStr);
 
     // 长租过滤：租期 > 90 天跳过
-    if (rentalDays > 90) {
+    if (rentalDays !== null && rentalDays > 90) {
       return null;
     }
 
@@ -102,22 +109,22 @@ export class RenrenzuParser {
     const shipDateStr = cols[colMap["发货时间"]] || cols[colMap["发货日期"]] || "";
     const shipDate = this.parseDate(shipDateStr);
 
-    // 计算归还日期（预估）：发货日期 + 租期 + 3天缓冲
-    const estimatedReturnDate = new Date(shipDate || Date.now());
-    estimatedReturnDate.setDate(estimatedReturnDate.getDate() + rentalDays + 3);
+    // 计算归还日期（预估）：参考Python逻辑
+    // - 若续租租期不为空，取续租最后一段结束日期 + 3天
+    // - 否则取主租期结束日期 + 3天
+    const estimatedReturnDate = this.calcEstimatedReturn(rentalPeriod, renewalPeriod);
 
-    // 计算实际发货日期
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const actualShipDate = shipDateStr && shipDate && yesterday > shipDate
-      ? new Date(shipDate.getTime() - 3 * 24 * 60 * 60 * 1000)
-      : yesterday;
+    // 计算实际发货日期：参考Python逻辑
+    // - 取租期开始日期
+    // - if (today - 1) > start_date: 返回 start_date - 3天
+    // - else: 返回 today - 1
+    const actualShipDate = this.calcActualShipDate(rentalPeriod);
 
     // 解析租金
     const rentalFeeStr = cols[colMap["总租金"]] || cols[colMap["租金"]] || "0";
     const rentalFee = parseFloat(rentalFeeStr.replace(/[^\d.]/g, "")) || 0;
 
-    // 映射订单状态
+    // 映射订单状态（参考Python逻辑）
     const mappedStatus = this.mapStatus(status);
 
     return {
@@ -129,13 +136,113 @@ export class RenrenzuParser {
       sn_code: "", // 人人租 CSV 无有效 SN，留空
       device_model: cols[colMap["型号"]] || "",
       package: cols[colMap["套餐名称"]] || "",
-      estimated_return_date: estimatedReturnDate,
+      estimated_return_date: estimatedReturnDate || undefined,
       rental_days: rentalDays,
       rental_fee: rentalFee,
-      actual_ship_date: actualShipDate,
+      actual_ship_date: actualShipDate || undefined,
       status: mappedStatus,
       raw_status: status,
     };
+  }
+
+  /**
+   * 从字符串中提取数字
+   * 如 "30天" → 30, "7" → 7
+   */
+  private extractNumber(val: string): number | null {
+    if (!val) return null;
+    const s = val.trim();
+    if (!s) return null;
+    const match = s.match(/(\d+)/);
+    return match ? parseInt(match[1], 10) : null;
+  }
+
+  /**
+   * 解析租期字段，格式：'2026-04-10 ~ 2026-04-14'
+   * 返回 (start_date, end_date)
+   */
+  private parseRentalPeriod(val: string): { start: Date | null; end: Date | null } {
+    if (!val) return { start: null, end: null };
+    const s = val.trim();
+    const match = s.match(/(\d{4}-\d{2}-\d{2})\s*~\s*(\d{4}-\d{2}-\d{2})/);
+    if (!match) return { start: null, end: null };
+    try {
+      const start = new Date(match[1]);
+      const end = new Date(match[2]);
+      return { start, end };
+    } catch {
+      return { start: null, end: null };
+    }
+  }
+
+  /**
+   * 解析续租租期字段，格式：'2026-04-14至2026-04-14;2026-04-17至2026-04-19;'
+   * 返回最后一段的结束日期
+   */
+  private parseRenewalLastEnd(val: string): Date | null {
+    if (!val) return null;
+    const s = val.trim();
+    if (!s) return null;
+    // 分割多段
+    const segments = s.split(";").map(seg => seg.trim()).filter(seg => seg);
+    if (segments.length === 0) return null;
+    // 取最后一段
+    const lastSeg = segments[segments.length - 1];
+    const match = lastSeg.match(/\d{4}-\d{2}-\d{2}至(\d{4}-\d{2}-\d{2})/);
+    if (!match) return null;
+    try {
+      return new Date(match[1]);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * 计算归还日期（预估）
+   * - 若续租租期不为空，取续租最后一段结束日期 + 3天
+   * - 否则取主租期结束日期 + 3天
+   */
+  private calcEstimatedReturn(rentalPeriod: string, renewalPeriod: string): Date | null {
+    // 先尝试续租
+    const endRenew = this.parseRenewalLastEnd(renewalPeriod);
+    if (endRenew) {
+      const result = new Date(endRenew);
+      result.setDate(result.getDate() + 3);
+      return result;
+    }
+    // 取主租期结束日期
+    const { end } = this.parseRentalPeriod(rentalPeriod);
+    if (end) {
+      const result = new Date(end);
+      result.setDate(result.getDate() + 3);
+      return result;
+    }
+    return null;
+  }
+
+  /**
+   * 计算实际发货日期
+   * - 取租期开始日期
+   * - if (today - 1) > start_date: 返回 start_date - 3天
+   * - else: 返回 today - 1
+   */
+  private calcActualShipDate(rentalPeriod: string): Date | null {
+    const { start } = this.parseRentalPeriod(rentalPeriod);
+    if (!start) return null;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    let result: Date;
+    if (yesterday > start) {
+      result = new Date(start);
+      result.setDate(result.getDate() - 3);
+    } else {
+      result = yesterday;
+    }
+    return result;
   }
 
   /**
@@ -146,9 +253,9 @@ export class RenrenzuParser {
 
     // 尝试多种日期格式
     const formats = [
-      // YYYY-MM-DD
+      // YYYY-MM-DD HH:mm:ss
       /^(\d{4})-(\d{1,2})-(\d{1,2})/,
-      // YYYY/MM/DD
+      // YYYY/MM/DD HH:mm:ss
       /^(\d{4})\/(\d{1,2})\/(\d{1,2})/,
       // DD/MM/YYYY
       /^(\d{1,2})\/(\d{1,2})\/(\d{4})/,
@@ -174,13 +281,19 @@ export class RenrenzuParser {
   }
 
   /**
-   * 映射订单状态
+   * 映射订单状态（参考Python逻辑）
+   * 状态映射：
+   * - "交易完成" → "已完结"
+   * - "订单关闭（商家/系统/用户）" → "取消"
+   * - 其他状态（包括"待发货/待归还/待收货/归还中/租用中"）→ ""（进行中）
    */
   private mapStatus(rawStatus: string): string {
     const status = rawStatus.trim();
-    if (status === "已完结") return "已完结";
-    if (status === "退款" || status === "取消") return "取消";
-    // 进行中（待归还/待收货/归还中/待发货/订单关闭）
+    // 已完结
+    if (status === "交易完成") return "已完结";
+    // 取消
+    if (status.includes("订单关闭")) return "取消";
+    // 进行中（待发货/待归还/待收货/归还中/租用中/退款等）
     return "";
   }
 }
