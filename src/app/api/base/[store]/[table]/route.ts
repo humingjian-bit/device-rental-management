@@ -96,8 +96,9 @@ async function formatRecordAsync(
   // 找到所有Lookup字段及其关联的设备表字段
   console.log(`[lookup] 检查字段，共 ${fields.length} 个字段`);
   for (const field of fields) {
-    console.log(`[lookup] 字段: ${field.field_name}, type=${field.type}, ui_type=${field.ui_type}, target_field=${field.property?.target_field}`);
-    if (field.type === 19 && field.property?.target_field) {
+    const isLookup = field.type === 19 || field.ui_type === 'LOOKUP';
+    console.log(`[lookup] 字段: "${field.field_name}", type=${field.type}, ui_type=${field.ui_type}, isLookup=${isLookup}, target_field=${field.property?.target_field}`);
+    if ((field.type === 19 || field.ui_type === 'LOOKUP') && field.property?.target_field) {
       // 这是一个lookup字段
       const value = formatted[field.field_name];
       
