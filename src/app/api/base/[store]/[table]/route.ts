@@ -185,23 +185,40 @@ async function formatRecordAsync(
       
       let recordIds: string[] = [];
       
-      if (value && typeof value === 'object' && 'record_ids' in value) {
-        // 格式: {"record_ids":[...],"table_id":"...","text":null,...}
+      // 格式1: {"record_ids":[...],"table_id":"...","text":null,...}  单个对象
+      if (value && typeof value === 'object' && !Array.isArray(value) && 'record_ids' in value) {
         const linkValue = value as { record_ids?: string[] };
         recordIds = linkValue.record_ids || [];
-        console.log(`[SingleLink] 使用格式record_ids:`, JSON.stringify(recordIds));
-      } else if (value && typeof value === 'object' && 'link_record_ids' in value) {
+        console.log(`[SingleLink] 格式1 record_ids:`, JSON.stringify(recordIds));
+      }
+      // 格式2: [{"record_ids":[...],"table_id":"..."},...]  数组格式
+      else if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'object' && 'record_ids' in (value[0] as object)) {
+        const arr = value as Array<{ record_ids?: string[] }>;
+        for (const item of arr) {
+          if (item.record_ids && item.record_ids.length > 0) {
+            recordIds.push(...item.record_ids);
+          }
+        }
+        console.log(`[SingleLink] 格式2 record_ids数组:`, JSON.stringify(recordIds));
+      }
+      // 格式3: {"link_record_ids":[...]}
+      else if (value && typeof value === 'object' && 'link_record_ids' in value) {
         const linkValue = value as { link_record_ids?: string[] };
         recordIds = linkValue.link_record_ids || [];
-        console.log(`[SingleLink] 使用格式link_record_ids:`, JSON.stringify(recordIds));
-      } else if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'string' && (value[0] as string).startsWith('rec')) {
+        console.log(`[SingleLink] 格式3 link_record_ids:`, JSON.stringify(recordIds));
+      }
+      // 格式4: ["recxxx"]
+      else if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'string' && (value[0] as string).startsWith('rec')) {
         recordIds = value as string[];
-        console.log(`[SingleLink] 使用格式数组rec:`, JSON.stringify(recordIds));
-      } else if (typeof value === 'string' && value.startsWith('rec')) {
+        console.log(`[SingleLink] 格式4 数组rec:`, JSON.stringify(recordIds));
+      }
+      // 格式5: "recxxx"
+      else if (typeof value === 'string' && value.startsWith('rec')) {
         recordIds = [value];
-        console.log(`[SingleLink] 使用格式字符串rec:`, JSON.stringify(recordIds));
-      } else {
-        console.log(`[SingleLink] 不匹配任何格式, type=${typeof value}`);
+        console.log(`[SingleLink] 格式5 字符串rec:`, JSON.stringify(recordIds));
+      }
+      else {
+        console.log(`[SingleLink] 不匹配任何格式`);
       }
       
       if (recordIds.length > 0) {
