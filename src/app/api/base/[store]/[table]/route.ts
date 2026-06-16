@@ -114,56 +114,50 @@ async function formatRecordAsync(
       console.log(`[lookup] 关联的设备表字段: "${targetDeviceField?.field_name}", type=${targetDeviceField?.type}, ui_type=${targetDeviceField?.ui_type}`);
     }
     
-    if ((isLookup || isSingleLink) && field.property?.target_field) {
-      // 这是一个lookup字段
+    if (isLookup && field.property?.target_field) {
+      // 这是一个Lookup字段
+      // 飞书返回的Lookup值可能是选项ID数组（如 ["optxxx"]），而不是record_id
       const value = formatted[field.field_name];
-      
-      // 调试：打印原始 value
       console.log(`[lookup] "${field.field_name}" 原始值:`, JSON.stringify(value));
       
-      // 兼容多种 lookup 返回格式
-      let recordIds: string[] = [];
+      // 找到关联的设备表字段定义（用于映射选项ID到名称）
+      const targetDeviceField = deviceFields.find(f => f.field_id === field.property?.target_field);
+      const options = targetDeviceField?.property?.options || [];
+      console.log(`[lookup] 关联字段"${targetDeviceField?.field_name}"的选项:`, options.map(o => `${o.id}:${o.name}`).join(', '));
       
-      // 格式1: {link_record_ids: ["recxxx"]}
-      if (value && typeof value === 'object' && 'link_record_ids' in value) {
-        const linkValue = value as { link_record_ids?: string[] };
-        recordIds = linkValue.link_record_ids || [];
-        console.log(`[lookup] 使用格式1: link_record_ids=${JSON.stringify(recordIds)}`);
-      }
-      // 格式2: ["recxxx"] 直接是数组
-      else if (Array.isArray(value) && value.length > 0) {
-        if (typeof value[0] === 'string' && value[0].startsWith('rec')) {
-          recordIds = value as string[];
-          console.log(`[lookup] 使用格式2: recordIds=${JSON.stringify(recordIds)}`);
-        } else {
-          console.log(`[lookup] 数组格式但第一个元素不是rec:`, JSON.stringify(value));
+      // 处理选项ID数组格式 ["optxxx"]
+      if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'string' && value[0].startsWith('opt')) {
+        const displayItems: Array<{ text: string; record_ids: string[] }> = [];
+        for (const optId of value as string[]) {
+          // 查找选项名称
+          const opt = options.find(o => o.id === optId);
+          const text = opt ? opt.name : optId;
+          displayItems.push({ text, record_ids: [] });
+          console.log(`[lookup] 映射选项ID: ${optId} -> ${text}`);
         }
+        formatted[field.field_name] = displayItems;
       }
-      // 格式3: 直接是字符串 record_id
-      else if (typeof value === 'string' && value.startsWith('rec')) {
-        recordIds = [value];
-        console.log(`[lookup] 使用格式3: recordIds=${JSON.stringify(recordIds)}`);
-      } else {
-        console.log(`[lookup] 值不匹配任何格式: type=${typeof value}`);
-      }
-      
-      if (recordIds.length > 0) {
-        // 找到关联的设备表
-        const deviceTableId = store.tables.device;
+      // 处理record_id格式（备用）
+      else {
+        let recordIds: string[] = [];
         
-        // 找到target_field对应的设备表字段
-        const targetDeviceField = deviceFields.find(f => f.field_id === field.property?.target_field);
+        if (value && typeof value === 'object' && 'link_record_ids' in value) {
+          const linkValue = value as { link_record_ids?: string[] };
+          recordIds = linkValue.link_record_ids || [];
+        } else if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'string' && (value[0] as string).startsWith('rec')) {
+          recordIds = value as string[];
+        } else if (typeof value === 'string' && value.startsWith('rec')) {
+          recordIds = [value];
+        }
         
-        if (targetDeviceField) {
-          // 构建前端期望的格式: [{text: "xxx", record_ids: ["recxxx"]}]
+        if (recordIds.length > 0) {
+          const deviceTableId = store.tables.device;
           const displayItems: Array<{ text: string; record_ids: string[] }> = [];
+          
           for (const recordId of recordIds) {
             try {
               const linkedRecord = await getBitableRecord(store.base_token, deviceTableId, recordId);
-              console.log(`[lookup] 设备表ID=${deviceTableId}, recordId=${recordId}, targetField=${targetDeviceField.field_name}`);
-              console.log(`[lookup] linkedRecord:`, JSON.stringify(linkedRecord));
-              const displayValue = linkedRecord[targetDeviceField.field_name];
-              console.log(`[lookup] displayValue:`, JSON.stringify(displayValue));
+              const displayValue = linkedRecord[targetDeviceField!.field_name];
               let text = "";
               if (displayValue !== null && displayValue !== undefined) {
                 if (Array.isArray(displayValue)) {
@@ -174,18 +168,14 @@ async function formatRecordAsync(
               }
               displayItems.push({ text, record_ids: [recordId] });
             } catch (e) {
-              console.error(`[lookup] 获取关联记录失败: deviceTableId=${deviceTableId}, recordId=${recordId}, targetField=${targetDeviceField.field_name}, error=${e}`);
-              // 即使失败也保留record_id作为文本
+              console.error(`[lookup] 获取关联记录失败: recordId=${recordId}, error=${e}`);
               displayItems.push({ text: recordId, record_ids: [recordId] });
             }
           }
           formatted[field.field_name] = displayItems;
         } else {
-          // 没有找到target字段，保留原始格式
-          formatted[field.field_name] = { link_record_ids: recordIds };
+          formatted[field.field_name] = [];
         }
-      } else {
-        formatted[field.field_name] = [];
       }
     } else if (field.type === 18 || field.ui_type === 'SingleLink') {
       // SingleLink(type=18) 没有 target_field，需要特殊处理
