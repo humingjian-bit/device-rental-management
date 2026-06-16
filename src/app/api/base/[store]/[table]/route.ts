@@ -98,53 +98,62 @@ async function formatRecordAsync(
     if (field.type === 19 && field.property?.target_field) {
       // 这是一个lookup字段
       const value = formatted[field.field_name];
+      
+      // 兼容多种 lookup 返回格式
+      let recordIds: string[] = [];
+      
+      // 格式1: {link_record_ids: ["recxxx"]}
       if (value && typeof value === 'object' && 'link_record_ids' in value) {
         const linkValue = value as { link_record_ids?: string[] };
-        const recordIds = linkValue.link_record_ids || [];
-        
-        if (recordIds.length > 0) {
-          // 找到关联的设备表
-          // 需要根据target_field找到对应的设备表
-          // 通常lookup是关联到设备表tblVxflMiJ59wI51
-          const deviceTableId = store.tables.device;
-          
-          // 找到target_field对应的设备表字段
-          const fieldProperty = field.property;
-          const targetDeviceField = fieldProperty
-            ? deviceFields.find(f => f.field_id === fieldProperty.target_field)
-            : null;
-          
-          if (targetDeviceField) {
-            // 构建前端期望的格式: [{text: "xxx", record_ids: ["recxxx"]}]
-            const displayItems: Array<{ text: string; record_ids: string[] }> = [];
-            for (const recordId of recordIds) {
-              try {
-                // getBitableRecord返回的是fields的展开，不需要再访问.fields
-                const linkedRecord = await getBitableRecord(store.base_token, deviceTableId, recordId);
-                const displayValue = linkedRecord[targetDeviceField.field_name];
-                let text = "";
-                if (displayValue !== null && displayValue !== undefined) {
-                  if (Array.isArray(displayValue)) {
-                    text = displayValue.map(v => String(v)).join(", ");
-                  } else {
-                    text = String(displayValue);
-                  }
-                }
-                displayItems.push({ text, record_ids: [recordId] });
-              } catch (e) {
-                console.error(`[lookup] 获取关联记录失败: ${recordId}`, e);
-                // 即使失败也保留record_id
-                displayItems.push({ text: recordId, record_ids: [recordId] });
-              }
-            }
-            formatted[field.field_name] = displayItems;
-          } else {
-            // 没有找到target字段，保留原始格式
-            formatted[field.field_name] = { link_record_ids: recordIds };
-          }
-        } else {
-          formatted[field.field_name] = [];
+        recordIds = linkValue.link_record_ids || [];
+      }
+      // 格式2: ["recxxx"] 直接是数组
+      else if (Array.isArray(value) && value.length > 0) {
+        if (typeof value[0] === 'string' && value[0].startsWith('rec')) {
+          recordIds = value as string[];
         }
+      }
+      // 格式3: 直接是字符串 record_id
+      else if (typeof value === 'string' && value.startsWith('rec')) {
+        recordIds = [value];
+      }
+      
+      if (recordIds.length > 0) {
+        // 找到关联的设备表
+        const deviceTableId = store.tables.device;
+        
+        // 找到target_field对应的设备表字段
+        const targetDeviceField = deviceFields.find(f => f.field_id === field.property?.target_field);
+        
+        if (targetDeviceField) {
+          // 构建前端期望的格式: [{text: "xxx", record_ids: ["recxxx"]}]
+          const displayItems: Array<{ text: string; record_ids: string[] }> = [];
+          for (const recordId of recordIds) {
+            try {
+              const linkedRecord = await getBitableRecord(store.base_token, deviceTableId, recordId);
+              const displayValue = linkedRecord[targetDeviceField.field_name];
+              let text = "";
+              if (displayValue !== null && displayValue !== undefined) {
+                if (Array.isArray(displayValue)) {
+                  text = displayValue.map(v => String(v)).join(", ");
+                } else {
+                  text = String(displayValue);
+                }
+              }
+              displayItems.push({ text, record_ids: [recordId] });
+            } catch (e) {
+              console.error(`[lookup] 获取关联记录失败: ${recordId}`, e);
+              // 即使失败也保留record_id作为文本
+              displayItems.push({ text: recordId, record_ids: [recordId] });
+            }
+          }
+          formatted[field.field_name] = displayItems;
+        } else {
+          // 没有找到target字段，保留原始格式
+          formatted[field.field_name] = { link_record_ids: recordIds };
+        }
+      } else {
+        formatted[field.field_name] = [];
       }
     } else {
       // 非lookup字段，使用原有格式化逻辑

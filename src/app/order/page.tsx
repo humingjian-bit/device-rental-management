@@ -78,6 +78,8 @@ export default function OrderPage() {
     { field: "归还日期（预估）", headerName: "归还日期（预估）", width: 120, type: "date" },
     { field: "租金", headerName: "租金", width: 100, type: "number" },
     { field: "备注", headerName: "备注", width: 200 },
+    { field: "净收益", headerName: "净收益", width: 100, type: "number" },
+    { field: "分类", headerName: "分类", width: 100, type: "select" },
   ];
 
   const columnsWithOptions = orderColumns.map((col) => {
