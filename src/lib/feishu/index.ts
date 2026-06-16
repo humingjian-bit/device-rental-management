@@ -196,7 +196,7 @@ export async function getBitableRecord(
 
   const data = await res.json();
   if (data.code !== 0) {
-    throw new Error(`Failed to get record: ${data.msg}`);
+    throw new Error(`Failed to get record: code=${data.code}, msg=${data.msg}`);
   }
 
   return { ...data.data?.record?.fields, _record_id: recordId };

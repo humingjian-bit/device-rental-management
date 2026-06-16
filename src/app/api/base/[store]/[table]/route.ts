@@ -131,7 +131,10 @@ async function formatRecordAsync(
           for (const recordId of recordIds) {
             try {
               const linkedRecord = await getBitableRecord(store.base_token, deviceTableId, recordId);
+              console.log(`[lookup] 设备表ID=${deviceTableId}, recordId=${recordId}, targetField=${targetDeviceField.field_name}`);
+              console.log(`[lookup] linkedRecord:`, JSON.stringify(linkedRecord));
               const displayValue = linkedRecord[targetDeviceField.field_name];
+              console.log(`[lookup] displayValue:`, JSON.stringify(displayValue));
               let text = "";
               if (displayValue !== null && displayValue !== undefined) {
                 if (Array.isArray(displayValue)) {
@@ -142,7 +145,7 @@ async function formatRecordAsync(
               }
               displayItems.push({ text, record_ids: [recordId] });
             } catch (e) {
-              console.error(`[lookup] 获取关联记录失败: ${recordId}`, e);
+              console.error(`[lookup] 获取关联记录失败: deviceTableId=${deviceTableId}, recordId=${recordId}, targetField=${targetDeviceField.field_name}, error=${e}`);
               // 即使失败也保留record_id作为文本
               displayItems.push({ text: recordId, record_ids: [recordId] });
             }
