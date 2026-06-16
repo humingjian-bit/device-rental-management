@@ -162,8 +162,52 @@ async function formatRecordAsync(
       } else {
         formatted[field.field_name] = [];
       }
+    } else if (field.type === 18 || field.ui_type === 'SingleLink') {
+      // SingleLink(type=18) 没有 target_field，需要特殊处理：直接获取关联记录显示SN
+      const value = formatted[field.field_name];
+      let recordIds: string[] = [];
+      
+      if (value && typeof value === 'object' && 'link_record_ids' in value) {
+        const linkValue = value as { link_record_ids?: string[] };
+        recordIds = linkValue.link_record_ids || [];
+      } else if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'string' && (value[0] as string).startsWith('rec')) {
+        recordIds = value as string[];
+      } else if (typeof value === 'string' && value.startsWith('rec')) {
+        recordIds = [value];
+      }
+      
+      if (recordIds.length > 0) {
+        const deviceTableId = store.tables.device;
+        console.log(`[SingleLink] 字段="${field.field_name}", deviceTableId=${deviceTableId}, recordIds=${JSON.stringify(recordIds)}`);
+        
+        const displayItems: Array<{ text: string; record_ids: string[] }> = [];
+        for (const recordId of recordIds) {
+          try {
+            const linkedRecord = await getBitableRecord(store.base_token, deviceTableId, recordId);
+            console.log(`[SingleLink] linkedRecord keys:`, Object.keys(linkedRecord).join(', '));
+            // 尝试多个可能的SN字段名
+            const snValue = linkedRecord['SN编码'] || linkedRecord['SN'] || linkedRecord['sn'] || 
+                           linkedRecord['SN编码（最最重要）'] || linkedRecord['_record_id'];
+            let text = recordId;
+            if (snValue !== null && snValue !== undefined) {
+              if (Array.isArray(snValue)) {
+                text = snValue.map(v => String(v)).join(", ");
+              } else {
+                text = String(snValue);
+              }
+            }
+            displayItems.push({ text, record_ids: [recordId] });
+          } catch (e) {
+            console.error(`[SingleLink] 获取关联记录失败: ${e}`);
+            displayItems.push({ text: recordId, record_ids: [recordId] });
+          }
+        }
+        formatted[field.field_name] = displayItems;
+      } else {
+        formatted[field.field_name] = [];
+      }
     } else {
-      // 非lookup字段，使用原有格式化逻辑
+      // 非lookup/SingleLink字段，使用原有格式化逻辑
       const value = formatted[field.field_name];
       if (value !== null && value !== undefined) {
         formatted[field.field_name] = formatFieldValue(value, field, deviceOptionsByFieldId);
