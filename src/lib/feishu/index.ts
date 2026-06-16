@@ -293,6 +293,9 @@ export async function batchCreateBitableRecords(
 
   const data = await res.json();
   if (data.code !== 0) {
+    // 打印详细错误信息用于调试
+    console.error("[batchCreateBitableRecords] 飞书返回错误:", JSON.stringify(data, null, 2));
+    console.error("[batchCreateBitableRecords] 发送的数据:", JSON.stringify({ records }, null, 2).slice(0, 500));
     throw new Error(`Failed to batch create records: ${data.msg}`);
   }
 
