@@ -274,7 +274,7 @@ export class SyncEngine {
     if (order.device_model) fields["租机型号"] = order.device_model;
     if (order.package) fields["套餐"] = order.package;
     if (order.remark) fields["备注"] = order.remark;
-    if (order.rental_days) fields["租期（天）"] = String(order.rental_days);
+    if (order.rental_days) fields["租期（天）"] = order.rental_days;
     if (order.rental_fee) fields["租金"] = order.rental_fee;
     if (order.express_settlement) fields["快递结算方式"] = order.express_settlement;
 
