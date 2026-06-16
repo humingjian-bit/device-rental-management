@@ -87,11 +87,20 @@ export class SyncEngine {
       const existingOrders = await this.queryExistingOrders(store.base_token, store.tables.order);
       this.addLog("INFO", `已有订单${existingOrders.size}条`);
 
-      // Step 4: 分拣新增/更新
+      // Step 4: 分拣新增/更新，跳过取消状态的订单
       const toCreate: SyncOrder[] = [];
       const toUpdate: { order: SyncOrder; record_id: string }[] = [];
+      const CANCEL_STATUSES = ["订单关闭（商家）", "订单关闭（系统）", "订单关闭（用户）", "取消"];
 
       for (const order of this.orders) {
+        // 跳过取消状态的订单（新增时跳过，更新时仍处理）
+        const isCanceled = CANCEL_STATUSES.includes(order.raw_status || "") || order.status === "取消";
+        if (isCanceled) {
+          this.stats.skipped++;
+          this.stats.skipped_reasons.push(`订单${order.order_no}已取消`);
+          continue;
+        }
+
         const existing = existingOrders.get(order.order_no);
         if (existing) {
           toUpdate.push({ order, record_id: existing.record_id });

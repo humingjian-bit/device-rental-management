@@ -96,8 +96,8 @@ export class RenrenzuParser {
     const rentalPeriod = cols[colMap["租期"]] || "";
     const renewalPeriod = cols[colMap["续租租期"]] || "";
 
-    // 租期天数：从"租期数"列提取数字（可能有"天"字）
-    const rentalDaysStr = cols[colMap["租期数"]] || "";
+    // 租期天数：从"租期"列提取数字（可能有"天"字，如"7天"→7）
+    const rentalDaysStr = cols[colMap["租期"]] || "";
     const rentalDays = this.extractNumber(rentalDaysStr);
 
     // 长租过滤：租期 > 90 天跳过
