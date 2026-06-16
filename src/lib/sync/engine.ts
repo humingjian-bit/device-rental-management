@@ -210,12 +210,13 @@ export class SyncEngine {
     tableId: string,
     orders: SyncOrder[]
   ): Promise<number> {
-    const fields = orders.map((order) => this.orderToFields(order, true));
+    // 构建符合飞书 API 格式的数据: [{ fields: {...} }, ...]
+    const records = orders.map((order) => ({ fields: this.orderToFields(order, true) }));
     const BATCH_SIZE = 500;
 
     let total = 0;
-    for (let i = 0; i < fields.length; i += BATCH_SIZE) {
-      const batch = fields.slice(i, i + BATCH_SIZE) as { fields: Record<string, unknown> }[];
+    for (let i = 0; i < records.length; i += BATCH_SIZE) {
+      const batch = records.slice(i, i + BATCH_SIZE);
       try {
         const result = await batchCreateBitableRecords(baseToken, tableId, batch);
         total += result.length;
