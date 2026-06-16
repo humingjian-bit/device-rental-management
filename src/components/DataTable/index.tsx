@@ -312,18 +312,25 @@ export default function DataTable({
     }
   };
 
-  // 高级搜索
-  const handleAdvancedSearch = () => {
-    if (onAdvancedSearch && advancedField && advancedValue) {
-      // 清除模糊搜索
+  // 高级搜索 - 使用 useCallback 保持稳定引用
+  const handleAdvancedSearch = useCallback(() => {
+    const field = advancedField;
+    const value = advancedValue;
+    if (onAdvancedSearch && field && value) {
+      // 先清空模糊搜索状态
       setSearchText("");
-      if (onSearch) {
-        onSearch("");
-      }
-      // 触发高级搜索
-      onAdvancedSearch(advancedField, advancedValue);
+      setDebouncedSearch("");
+      // 直接调用 onAdvancedSearch，不经过防抖
+      onAdvancedSearch(field, value);
     }
-  };
+  }, [advancedField, advancedValue, onAdvancedSearch]);
+
+  // 暴露重置高级搜索的方法给父组件使用
+  const resetAdvancedSearch = useCallback(() => {
+    setAdvancedField("");
+    setAdvancedValue("");
+    setAdvancedSearchOpen(false);
+  }, []);
 
   const handleClearAdvancedSearch = () => {
     setAdvancedField("");
@@ -444,6 +451,11 @@ export default function DataTable({
                 placeholder="精确值"
                 value={advancedValue}
                 onChange={(e) => setAdvancedValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && advancedField && advancedValue) {
+                    handleAdvancedSearch();
+                  }
+                }}
                 sx={{ width: 180 }}
               />
               <Button

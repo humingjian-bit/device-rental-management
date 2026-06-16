@@ -255,7 +255,7 @@ export async function GET(
   const searchMode = searchParams.get("search_mode") || "fuzzy";  // fuzzy 或 exact
   
   // 调试日志
-  console.log(`[搜索] mode=${searchMode}, field=${searchField}, value=${searchValue}`);
+  console.log(`[GET /api/base] store=${storeId}, table=${tableName}, mode=${searchMode}, field=${searchField}, value=${searchValue}, pageToken=${pageToken}`);
 
   try {
     // 获取当前表和设备表的字段定义，用于Lookup字段映射

@@ -176,8 +176,9 @@ export default function OrderPage() {
     setPageToken(undefined); // 重置分页
   }, []);
 
-  // 高级搜索处理
+  // 高级搜索处理 - 同步更新状态，确保 SWR 正确触发
   const handleAdvancedSearch = useCallback((field: string, value: string) => {
+    // 使用函数式更新确保状态正确
     setAdvancedSearch({ field, value });
     setSearchKeyword(""); // 清除模糊搜索
     setPageToken(undefined); // 重置分页

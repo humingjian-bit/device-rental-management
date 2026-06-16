@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import useSWR from "swr";
 import { useSearchParams } from "next/navigation";
 
@@ -65,17 +66,32 @@ export function useTableData(
     searchParams.set("search_value", params.advancedSearch.value);
   }
 
+  // 使用计数器强制 SWR 在高级搜索时重新请求
+  const [refreshCounter, setRefreshCounter] = useState(0);
+  
+  // 当高级搜索变化时，触发刷新计数器
+  useEffect(() => {
+    if (params?.advancedSearch?.field && params?.advancedSearch?.value) {
+      setRefreshCounter(c => c + 1);
+    }
+  }, [params?.advancedSearch?.field, params?.advancedSearch?.value]);
+
   // 添加访问token参数（从URL获取k参数）
   const accessToken = typeof window !== 'undefined' ? new URL(window.location.href).searchParams.get("k") : null;
   if (accessToken) {
     searchParams.set("k", accessToken);
   }
 
+  // 添加刷新计数器到 URL，确保高级搜索时不会使用缓存
+  if (refreshCounter > 0) {
+    searchParams.set("_refresh", String(refreshCounter));
+  }
+
   const url = `/api/base/${storeId}/${tableName}${searchParams.toString() ? "?" + searchParams.toString() : ""}`;
 
   const { data, error, isLoading, mutate } = useSWR(url, fetcher, {
     revalidateOnFocus: false,
-    dedupingInterval: 5000,
+    dedupingInterval: 0, // 禁用 deduping，确保每次搜索都能发送新请求
   });
 
   return {
