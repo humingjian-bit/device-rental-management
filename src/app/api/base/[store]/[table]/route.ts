@@ -354,6 +354,19 @@ export async function GET(
           sort,
         });
 
+        // 调试日志：打印API返回的字段名和lookup值
+        console.log(`[高级搜索] 命中 ${searchResult.items.length} 条记录`);
+        if (searchResult.items.length > 0) {
+          const firstItem = searchResult.items[0];
+          const fieldNames = Object.keys(firstItem);
+          console.log(`[高级搜索] 字段列表: ${fieldNames.join(', ')}`);
+          // 打印SN编码字段的原始值
+          const snField = fieldNames.find(f => f.includes('SN'));
+          if (snField) {
+            console.log(`[高级搜索] SN字段 "${snField}" 原始值:`, JSON.stringify(firstItem[snField]));
+          }
+        }
+        
         // 使用异步格式化函数处理所有字段（包括lookup）
         const storeConfig = { base_token: store.base_token, tables: store.tables };
         allItems = await Promise.all(
@@ -361,6 +374,15 @@ export async function GET(
             formatRecordAsync(item, fields, storeConfig, deviceOptionsByFieldId, deviceFields)
           )
         );
+        
+        // 调试日志：打印格式化后的lookup值
+        if (allItems.length > 0) {
+          const firstItem = allItems[0];
+          const snField = Object.keys(firstItem).find(f => f.includes('SN'));
+          if (snField) {
+            console.log(`[高级搜索] SN字段 "${snField}" 格式化后值:`, JSON.stringify(firstItem[snField]));
+          }
+        }
 
         totalCount = searchResult.total;
         hasMore = searchResult.has_more;
