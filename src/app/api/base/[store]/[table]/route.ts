@@ -163,7 +163,8 @@ async function formatRecordAsync(
         formatted[field.field_name] = [];
       }
     } else if (field.type === 18 || field.ui_type === 'SingleLink') {
-      // SingleLink(type=18) 没有 target_field，需要特殊处理：直接获取关联记录显示SN
+      // SingleLink(type=18) 没有 target_field，需要特殊处理
+      // 小夏确认：SN编码关联的是库存表(inventory)，不是设备表
       const value = formatted[field.field_name];
       let recordIds: string[] = [];
       
@@ -177,14 +178,15 @@ async function formatRecordAsync(
       }
       
       if (recordIds.length > 0) {
-        const deviceTableId = store.tables.device;
-        console.log(`[SingleLink] 字段="${field.field_name}", deviceTableId=${deviceTableId}, recordIds=${JSON.stringify(recordIds)}, base_token=${store.base_token.substring(0, 10)}...`);
+        // 关联库存表而非设备表
+        const inventoryTableId = store.tables.inventory;
+        console.log(`[SingleLink] 字段="${field.field_name}", inventoryTableId=${inventoryTableId}, recordIds=${JSON.stringify(recordIds)}, base_token=${store.base_token.substring(0, 10)}...`);
         
         const displayItems: Array<{ text: string; record_ids: string[] }> = [];
         for (const recordId of recordIds) {
           try {
-            console.log(`[SingleLink] 调用getBitableRecord: tableId=${deviceTableId}, recordId=${recordId}`);
-            const linkedRecord = await getBitableRecord(store.base_token, deviceTableId, recordId);
+            console.log(`[SingleLink] 调用getBitableRecord: tableId=${inventoryTableId}, recordId=${recordId}`);
+            const linkedRecord = await getBitableRecord(store.base_token, inventoryTableId, recordId);
             console.log(`[SingleLink] 成功获取记录, keys=${Object.keys(linkedRecord).join(', ')}`);
             console.log(`[SingleLink] linkedRecord content:`, JSON.stringify(linkedRecord));
             // 尝试多个可能的SN字段名
@@ -201,7 +203,7 @@ async function formatRecordAsync(
             console.log(`[SingleLink] SN值: ${text}`);
             displayItems.push({ text, record_ids: [recordId] });
           } catch (e) {
-            console.error(`[SingleLink] 获取关联记录失败: recordId=${recordId}, error=${e}`);
+            console.error(`[SingleLink] 获取关联记录失败: inventoryTableId=${inventoryTableId}, recordId=${recordId}, error=${e}`);
             displayItems.push({ text: recordId, record_ids: [recordId] });
           }
         }
