@@ -178,13 +178,15 @@ async function formatRecordAsync(
       
       if (recordIds.length > 0) {
         const deviceTableId = store.tables.device;
-        console.log(`[SingleLink] 字段="${field.field_name}", deviceTableId=${deviceTableId}, recordIds=${JSON.stringify(recordIds)}`);
+        console.log(`[SingleLink] 字段="${field.field_name}", deviceTableId=${deviceTableId}, recordIds=${JSON.stringify(recordIds)}, base_token=${store.base_token.substring(0, 10)}...`);
         
         const displayItems: Array<{ text: string; record_ids: string[] }> = [];
         for (const recordId of recordIds) {
           try {
+            console.log(`[SingleLink] 调用getBitableRecord: tableId=${deviceTableId}, recordId=${recordId}`);
             const linkedRecord = await getBitableRecord(store.base_token, deviceTableId, recordId);
-            console.log(`[SingleLink] linkedRecord keys:`, Object.keys(linkedRecord).join(', '));
+            console.log(`[SingleLink] 成功获取记录, keys=${Object.keys(linkedRecord).join(', ')}`);
+            console.log(`[SingleLink] linkedRecord content:`, JSON.stringify(linkedRecord));
             // 尝试多个可能的SN字段名
             const snValue = linkedRecord['SN编码'] || linkedRecord['SN'] || linkedRecord['sn'] || 
                            linkedRecord['SN编码（最最重要）'] || linkedRecord['_record_id'];
@@ -196,9 +198,10 @@ async function formatRecordAsync(
                 text = String(snValue);
               }
             }
+            console.log(`[SingleLink] SN值: ${text}`);
             displayItems.push({ text, record_ids: [recordId] });
           } catch (e) {
-            console.error(`[SingleLink] 获取关联记录失败: ${e}`);
+            console.error(`[SingleLink] 获取关联记录失败: recordId=${recordId}, error=${e}`);
             displayItems.push({ text: recordId, record_ids: [recordId] });
           }
         }
