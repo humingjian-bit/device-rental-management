@@ -181,6 +181,8 @@ async function formatRecordAsync(
       // SingleLink(type=18) 没有 target_field，需要特殊处理
       // 小夏确认：SN编码关联的是库存表(inventory)，不是设备表
       const value = formatted[field.field_name];
+      console.log(`[SingleLink] "${field.field_name}" 原始值:`, JSON.stringify(value));
+      
       let recordIds: string[] = [];
       
       if (value && typeof value === 'object' && 'link_record_ids' in value) {
