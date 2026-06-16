@@ -94,7 +94,9 @@ async function formatRecordAsync(
   const formatted: Record<string, unknown> = { ...record };
   
   // 找到所有Lookup字段及其关联的设备表字段
+  console.log(`[lookup] 检查字段，共 ${fields.length} 个字段`);
   for (const field of fields) {
+    console.log(`[lookup] 字段: ${field.field_name}, type=${field.type}, ui_type=${field.ui_type}, target_field=${field.property?.target_field}`);
     if (field.type === 19 && field.property?.target_field) {
       // 这是一个lookup字段
       const value = formatted[field.field_name];
@@ -282,6 +284,12 @@ export async function GET(
       if (field.property?.options) {
         deviceOptionsByFieldId[field.field_id] = field.property.options;
       }
+    }
+    
+    // 调试日志：打印设备表的字段信息
+    console.log(`[lookup] 设备表字段列表 (共${deviceFields.length}个):`);
+    for (const f of deviceFields.slice(0, 10)) {
+      console.log(`[lookup]   - "${f.field_name}": id=${f.field_id}, type=${f.type}`);
     }
 
     // 找到所有Lookup字段及其关联的设备表字段
