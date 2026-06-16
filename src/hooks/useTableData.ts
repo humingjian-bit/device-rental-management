@@ -109,6 +109,7 @@ export interface FieldDefinition {
   field_id: string;
   field_name: string;
   type: number;
+  ui_type?: string;  // 飞书字段UI类型
   property?: {
     options?: { id: string; name: string; color: number }[];
   };
