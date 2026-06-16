@@ -118,6 +118,9 @@ async function formatRecordAsync(
       // 这是一个lookup字段
       const value = formatted[field.field_name];
       
+      // 调试：打印原始 value
+      console.log(`[lookup] "${field.field_name}" 原始值:`, JSON.stringify(value));
+      
       // 兼容多种 lookup 返回格式
       let recordIds: string[] = [];
       
@@ -125,16 +128,23 @@ async function formatRecordAsync(
       if (value && typeof value === 'object' && 'link_record_ids' in value) {
         const linkValue = value as { link_record_ids?: string[] };
         recordIds = linkValue.link_record_ids || [];
+        console.log(`[lookup] 使用格式1: link_record_ids=${JSON.stringify(recordIds)}`);
       }
       // 格式2: ["recxxx"] 直接是数组
       else if (Array.isArray(value) && value.length > 0) {
         if (typeof value[0] === 'string' && value[0].startsWith('rec')) {
           recordIds = value as string[];
+          console.log(`[lookup] 使用格式2: recordIds=${JSON.stringify(recordIds)}`);
+        } else {
+          console.log(`[lookup] 数组格式但第一个元素不是rec:`, JSON.stringify(value));
         }
       }
       // 格式3: 直接是字符串 record_id
       else if (typeof value === 'string' && value.startsWith('rec')) {
         recordIds = [value];
+        console.log(`[lookup] 使用格式3: recordIds=${JSON.stringify(recordIds)}`);
+      } else {
+        console.log(`[lookup] 值不匹配任何格式: type=${typeof value}`);
       }
       
       if (recordIds.length > 0) {
