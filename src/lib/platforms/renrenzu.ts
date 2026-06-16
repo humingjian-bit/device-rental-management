@@ -137,7 +137,7 @@ export class RenrenzuParser {
       device_model: cols[colMap["型号"]] || "",
       package: cols[colMap["套餐名称"]] || "",
       estimated_return_date: estimatedReturnDate || undefined,
-      rental_days: rentalDays,
+      rental_days: rentalDays ?? undefined,
       rental_fee: rentalFee,
       actual_ship_date: actualShipDate || undefined,
       status: mappedStatus,
