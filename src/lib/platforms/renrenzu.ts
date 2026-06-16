@@ -17,7 +17,10 @@ export class RenrenzuParser {
    */
   parse(content: string): SyncOrder[] {
     const orders: SyncOrder[] = [];
-    const lines = content.trim().split("\n");
+
+    // 移除 BOM 头
+    const cleanContent = content.replace(/^\uFEFF/, "");
+    const lines = cleanContent.trim().split("\n");
 
     if (lines.length < 2) {
       return orders;
@@ -25,12 +28,15 @@ export class RenrenzuParser {
 
     // 解析表头（第一行）
     const headers = this.parseCSVLine(lines[0]);
+    console.log("[RenrenzuParser] 表头列名:", headers);
 
     // 找到各列索引
     const colMap = this.getColumnMap(headers);
+    console.log("[RenrenzuParser] 列映射:", colMap);
 
     // 跳过第一行（表头），解析数据行
     for (let i = 1; i < lines.length; i++) {
+      if (!lines[i].trim()) continue; // 跳过空行
       try {
         const order = this.parseRow(lines[i], colMap);
         if (order) {
