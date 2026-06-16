@@ -93,13 +93,28 @@ async function formatRecordAsync(
 ): Promise<Record<string, unknown>> {
   const formatted: Record<string, unknown> = { ...record };
   
+  // 调试日志：打印设备表的 Lookup 字段
+  console.log(`[lookup] ===== 设备表字段分析 =====`);
+  for (const df of deviceFields) {
+    if (df.type === 3 || df.ui_type === 'SingleSelect') {
+      console.log(`[lookup] 设备表单选字段: "${df.field_name}", id=${df.field_id}, options=${df.property?.options?.map(o => `${o.id}:${o.name}`).join(', ')}`);
+    }
+  }
+  
   // 找到所有Lookup字段及其关联的设备表字段
-  console.log(`[lookup] 检查字段，共 ${fields.length} 个字段`);
+  console.log(`[lookup] ===== 检查订单表Lookup字段 =====`);
   for (const field of fields) {
     const isLookup = field.type === 19 || field.ui_type === 'Lookup';
     const isSingleLink = field.type === 18 || field.ui_type === 'SingleLink';
-    console.log(`[lookup] 字段: "${field.field_name}", type=${field.type}, ui_type=${field.ui_type}, isLookup=${isLookup}, isSingleLink=${isSingleLink}, target_field=${field.property?.target_field}`);
-    if ((field.type === 19 || field.ui_type === 'Lookup' || field.type === 18 || field.ui_type === 'SingleLink') && field.property?.target_field) {
+    console.log(`[lookup] 字段: "${field.field_name}", type=${field.type}, ui_type=${field.ui_type}, target_field=${field.property?.target_field}`);
+    
+    if (isLookup && field.property?.target_field) {
+      // 打印 target_field 对应的设备表字段信息
+      const targetDeviceField = deviceFields.find(f => f.field_id === field.property?.target_field);
+      console.log(`[lookup] 关联的设备表字段: "${targetDeviceField?.field_name}", type=${targetDeviceField?.type}, ui_type=${targetDeviceField?.ui_type}`);
+    }
+    
+    if ((isLookup || isSingleLink) && field.property?.target_field) {
       // 这是一个lookup字段
       const value = formatted[field.field_name];
       
