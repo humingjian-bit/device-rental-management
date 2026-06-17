@@ -35,12 +35,18 @@ export class RenrenzuParser {
     console.log("[RenrenzuParser] 列映射:", colMap);
 
     // 跳过第一行（表头），解析数据行
+    console.log(`[RenrenzuParser] 数据行数: ${lines.length - 1}`);
     for (let i = 1; i < lines.length; i++) {
-      if (!lines[i].trim()) continue; // 跳过空行
+      const line = lines[i].trim();
+      if (!line) continue; // 跳过空行
+      console.log(`[RenrenzuParser] 第${i + 1}行数据:`, line.substring(0, 200));
       try {
-        const order = this.parseRow(lines[i], colMap);
+        const order = this.parseRow(line, colMap);
         if (order) {
           orders.push(order);
+          console.log(`[RenrenzuParser] 解析成功: ${order.order_no}`);
+        } else {
+          console.log(`[RenrenzuParser] 跳过: 订单ID为空`);
         }
       } catch (e) {
         console.error(`[RenrenzuParser] 解析第${i + 1}行失败:`, e);
