@@ -20,7 +20,9 @@ export class RenrenzuParser {
 
     // 移除 BOM 头
     const cleanContent = content.replace(/^\uFEFF/, "");
+    console.log(`[RenrenzuParser] 原始内容长度: ${content.length}, 清理后: ${cleanContent.length}`);
     const lines = cleanContent.trim().split("\n");
+    console.log(`[RenrenzuParser] split后行数: ${lines.length}`);
 
     if (lines.length < 2) {
       return orders;
