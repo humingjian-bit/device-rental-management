@@ -59,7 +59,10 @@ export class RenrenzuParser {
   }
 
   /**
-   * 解析单行CSV
+   * 解析单行CSV（标准RFC 4180格式）
+   * - 引号内逗号不分割
+   * - 双引号表示转义引号
+   * - 引号不在结果中保留
    */
   private parseCSVLine(line: string): string[] {
     const result: string[] = [];
@@ -70,7 +73,17 @@ export class RenrenzuParser {
       const char = line[i];
 
       if (char === '"') {
-        inQuotes = !inQuotes;
+        if (inQuotes) {
+          // 引号内遇到引号：检查是否是转义引号（双引号""）
+          if (i + 1 < line.length && line[i + 1] === '"') {
+            current += '"';
+            i++; // 跳过下一个引号
+          } else {
+            inQuotes = false; // 退出引号
+          }
+        } else {
+          inQuotes = true; // 进入引号
+        }
       } else if (char === "," && !inQuotes) {
         result.push(current.trim());
         current = "";
