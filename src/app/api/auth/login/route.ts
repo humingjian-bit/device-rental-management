@@ -17,10 +17,14 @@ interface UsersConfig {
 function loadUsers(): User[] {
   try {
     const configPath = path.join(process.cwd(), "config", "users.yaml");
+    console.log("[Login] Config path:", configPath);
     const content = fs.readFileSync(configPath, "utf-8");
+    console.log("[Login] File content length:", content.length);
     const config = yaml.load(content) as UsersConfig;
+    console.log("[Login] Config:", JSON.stringify(config));
     return config.users || [];
-  } catch {
+  } catch (error) {
+    console.error("[Login] Load users error:", error);
     return [];
   }
 }
@@ -28,6 +32,7 @@ function loadUsers(): User[] {
 export async function POST(request: NextRequest) {
   try {
     const { username, password } = await request.json();
+    console.log("[Login] Username:", username);
 
     if (!username || !password) {
       return NextResponse.json(
@@ -37,16 +42,22 @@ export async function POST(request: NextRequest) {
     }
 
     const users = loadUsers();
+    console.log("[Login] Users loaded:", users.length);
+    
     const user = users.find((u) => u.username === username);
+    console.log("[Login] User found:", user ? "yes" : "no");
 
     if (!user) {
+      console.log("[Login] User not found");
       return NextResponse.json(
         { error: "用户名或密码错误" },
         { status: 401 }
       );
     }
 
+    console.log("[Login] Comparing password...");
     const isValid = await bcrypt.compare(password, user.password_hash);
+    console.log("[Login] Password valid:", isValid);
 
     if (!isValid) {
       return NextResponse.json(
@@ -77,6 +88,7 @@ export async function POST(request: NextRequest) {
       sameSite: "lax",
     });
 
+    console.log("[Login] Login success for user:", username);
     return response;
   } catch (error) {
     console.error("Login error:", error);
