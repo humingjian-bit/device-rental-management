@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import fs from "fs";
 import path from "path";
-import yaml from "js-yaml";
+import * as yaml from "js-yaml";
 
 interface User {
   username: string;
