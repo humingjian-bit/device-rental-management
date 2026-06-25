@@ -1,9 +1,52 @@
 "use client";
 
-import { Box, Typography, Button, Card, CardContent } from "@mui/material";
+import { useState } from "react";
+import {
+  Box,
+  Typography,
+  TextField,
+  Button,
+  Card,
+  CardContent,
+  Alert,
+  CircularProgress,
+} from "@mui/material";
 import LoginIcon from "@mui/icons-material/Login";
 
 export default function LoginPage() {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || "登录失败");
+        setLoading(false);
+        return;
+      }
+
+      // 登录成功，跳转到首页
+      window.location.href = "/";
+    } catch {
+      setError("网络错误，请稍后重试");
+      setLoading(false);
+    }
+  };
+
   return (
     <Box
       sx={{
@@ -38,23 +81,53 @@ export default function LoginPage() {
             设备租赁管理
           </Typography>
           <Typography color="text.secondary" sx={{ mb: 4 }}>
-            请使用飞书账号登录系统
+            请使用账号密码登录系统
           </Typography>
-          <Button
-            variant="contained"
-            size="large"
-            startIcon={<LoginIcon />}
-            href="/api/auth/feishu/login"
-            sx={{
-              textTransform: "none",
-              px: 4,
-              py: 1.5,
-              borderRadius: 2,
-              fontSize: "1rem",
-            }}
-          >
-            飞书登录
-          </Button>
+
+          {error && (
+            <Alert severity="error" sx={{ mb: 2, textAlign: "left" }}>
+              {error}
+            </Alert>
+          )}
+
+          <Box component="form" onSubmit={handleSubmit}>
+            <TextField
+              fullWidth
+              label="用户名"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              sx={{ mb: 2 }}
+              required
+              autoComplete="username"
+            />
+            <TextField
+              fullWidth
+              label="密码"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              sx={{ mb: 3 }}
+              required
+              autoComplete="current-password"
+            />
+            <Button
+              type="submit"
+              variant="contained"
+              size="large"
+              fullWidth
+              startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <LoginIcon />}
+              disabled={loading}
+              sx={{
+                textTransform: "none",
+                py: 1.5,
+                borderRadius: 2,
+                fontSize: "1rem",
+              }}
+            >
+              {loading ? "登录中..." : "登录"}
+            </Button>
+          </Box>
+
           <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 3 }}>
             首次使用请联系管理员开通权限
           </Typography>

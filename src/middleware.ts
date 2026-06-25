@@ -58,9 +58,9 @@ export function middleware(request: NextRequest) {
   // 3. API 路由也受保护
   const isApiRoute = pathname.startsWith("/api/");
 
-  // 4. 检查是否已通过飞书登录（feishu_user cookie）
-  const feishuUser = request.cookies.get("feishu_user")?.value;
-  if (feishuUser) {
+  // 4. 检查session cookie
+  const session = request.cookies.get("session")?.value;
+  if (session) {
     return NextResponse.next();
   }
 
