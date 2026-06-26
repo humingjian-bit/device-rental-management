@@ -120,6 +120,12 @@ export default function InventoryPage() {
     setPageToken(undefined); // 重置分页
   }, []);
 
+  // 清除高级搜索
+  const handleClearAdvancedSearch = useCallback(() => {
+    setAdvancedSearch(undefined);
+    setPageToken(undefined);
+  }, []);
+
   return (
     <Box>
       <Typography variant="h5" fontWeight="bold" gutterBottom>
@@ -133,10 +139,12 @@ export default function InventoryPage() {
         isLoading={isLoading}
         error={error}
         hasMore={has_more}
-        onPageChange={() => setPageToken(page_token)}
+        nextPageToken={page_token}
+        onPageChange={(token) => setPageToken(token)}
         onRefresh={() => mutate()}
         onSearch={handleSearch}
         onAdvancedSearch={handleAdvancedSearch}
+        onClearAdvancedSearch={handleClearAdvancedSearch}
         onUpdate={handleUpdate}
         emptyDisplay="-"
         // P1-006修复：传递字段定义用于映射 formula/lookup 选项ID

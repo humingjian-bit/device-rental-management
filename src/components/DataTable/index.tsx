@@ -34,6 +34,10 @@ import {
   Clear as ClearIcon,
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
+  FirstPage as FirstPageIcon,
+  LastPage as LastPageIcon,
+  NavigateBefore as PrevIcon,
+  NavigateNext as NextIcon,
 } from "@mui/icons-material";
 
 export interface FieldDef {
@@ -62,11 +66,13 @@ interface DataTableProps {
   isLoading: boolean;
   error: unknown;
   pageToken?: string;
+  nextPageToken?: string;
   hasMore: boolean;
   onPageChange: (pageToken?: string) => void;
   onRefresh: () => void;
   onSearch?: (keyword: string) => void;  // 模糊搜索回调
   onAdvancedSearch?: (field: string, value: string) => void;  // 高级搜索回调（精确匹配）
+  onClearAdvancedSearch?: () => void;  // 清除高级搜索回调
   onCreate?: (fields: Record<string, unknown>) => Promise<void>;
   onUpdate?: (recordId: string, fields: Record<string, unknown>, currentRow?: Record<string, unknown>) => Promise<void>;
   pageSize?: number;
@@ -271,10 +277,12 @@ export default function DataTable({
   isLoading,
   error,
   hasMore,
+  nextPageToken,
   onPageChange,
   onRefresh,
   onSearch,
   onAdvancedSearch,
+  onClearAdvancedSearch,
   onCreate,
   onUpdate,
   pageSize = 20,
@@ -287,11 +295,20 @@ export default function DataTable({
   const [advancedSearchOpen, setAdvancedSearchOpen] = useState(false);  // 高级搜索展开状态
   const [advancedField, setAdvancedField] = useState("");  // 高级搜索字段
   const [advancedValue, setAdvancedValue] = useState("");  // 高级搜索值
+  const [pageTokens, setPageTokens] = useState<string[]>([]);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [jumpPage, setJumpPage] = useState("");
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editRecord, setEditRecord] = useState<Record<string, unknown> | null>(null);
   const [editFields, setEditFields] = useState<Record<string, unknown>>({});
   const [isCreate, setIsCreate] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // 重置分页状态（搜索时调用）
+  const resetPagination = useCallback(() => {
+    setCurrentPage(0);
+    setPageTokens([]);
+  }, []);
 
   // 防抖处理搜索输入
   useEffect(() => {
@@ -300,15 +317,17 @@ export default function DataTable({
       // 如果有 onSearch 回调，触发后端搜索
       if (onSearch) {
         onSearch(searchText);
+        resetPagination();
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchText, onSearch]);
+  }, [searchText, onSearch, resetPagination]);
 
   const handleClearSearch = () => {
     setSearchText("");
     if (onSearch) {
       onSearch("");
+      resetPagination();
     }
   };
 
@@ -320,10 +339,11 @@ export default function DataTable({
       // 先清空模糊搜索状态
       setSearchText("");
       setDebouncedSearch("");
+      resetPagination();
       // 直接调用 onAdvancedSearch，不经过防抖
       onAdvancedSearch(field, value);
     }
-  }, [advancedField, advancedValue, onAdvancedSearch]);
+  }, [advancedField, advancedValue, onAdvancedSearch, resetPagination]);
 
   // 暴露重置高级搜索的方法给父组件使用
   const resetAdvancedSearch = useCallback(() => {
@@ -335,8 +355,60 @@ export default function DataTable({
   const handleClearAdvancedSearch = () => {
     setAdvancedField("");
     setAdvancedValue("");
+    resetPagination();
+    // 通知父组件清除高级搜索状态
+    if (onClearAdvancedSearch) {
+      onClearAdvancedSearch();
+    }
     // 刷新数据（不带高级搜索条件）
     onRefresh();
+  };
+
+  // 首页
+  const handleFirstPage = () => {
+    setCurrentPage(0);
+    setPageTokens([]);
+    onPageChange(undefined);
+  };
+
+  // 上一页
+  const handlePrevPage = () => {
+    if (currentPage > 0) {
+      const newPage = currentPage - 1;
+      setCurrentPage(newPage);
+      onPageChange(pageTokens[newPage]);
+    }
+  };
+
+  // 下一页
+  const handleNextPage = () => {
+    if (hasMore && nextPageToken) {
+      const newPage = currentPage + 1;
+      // 保存当前页的 nextPageToken，用于后续返回该页
+      const newTokens = [...pageTokens];
+      newTokens[newPage] = nextPageToken;
+      setPageTokens(newTokens);
+      setCurrentPage(newPage);
+      // 触发加载下一页
+      onPageChange(nextPageToken);
+    }
+  };
+
+  // 跳转到指定页
+  const handleJumpToPage = () => {
+    const target = parseInt(jumpPage, 10);
+    if (isNaN(target) || target < 1) return;
+    if (target === 1) {
+      handleFirstPage();
+    } else if (target === currentPage + 1 && hasMore) {
+      handleNextPage();
+    } else if (target > 1 && target <= pageTokens.length) {
+      // 已加载过该页的token（pageTokens[target-1] 存储了到达该页所需的token）
+      const token = pageTokens[target - 1];
+      setCurrentPage(target - 1);
+      onPageChange(token);
+    }
+    setJumpPage("");
   };
 
   // 获取可搜索的字段列表（从columns中提取）
@@ -585,13 +657,44 @@ export default function DataTable({
       </TableContainer>
 
       {/* 分页 */}
-      {hasMore && (
-        <Box sx={{ display: "flex", justifyContent: "center", mt: 1 }}>
-          <Button size="small" onClick={() => onPageChange()}>
-            加载更多
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mt: 2 }}>
+        <Typography variant="body2" color="text.secondary">
+          {total > 0 ? `第 ${currentPage * pageSize + 1}-${currentPage * pageSize + rows.length} 条，共 ${total} 条` : `共 0 条`}
+        </Typography>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+          <IconButton size="small" onClick={handleFirstPage} disabled={currentPage === 0}>
+            <FirstPageIcon />
+          </IconButton>
+          <IconButton size="small" onClick={handlePrevPage} disabled={currentPage === 0}>
+            <PrevIcon />
+          </IconButton>
+          <Typography variant="body2" sx={{ mx: 0.5 }}>
+            第 {currentPage + 1} 页
+          </Typography>
+          <TextField
+            size="small"
+            placeholder="跳转"
+            value={jumpPage}
+            onChange={(e) => setJumpPage(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                handleJumpToPage();
+              }
+            }}
+            sx={{ width: 60, mx: 0.5 }}
+            inputProps={{ style: { padding: "4px 8px", textAlign: "center" } }}
+          />
+          <Button size="small" variant="text" onClick={handleJumpToPage} sx={{ minWidth: 0, px: 1 }}>
+            跳转
           </Button>
+          <IconButton size="small" onClick={handleNextPage} disabled={!hasMore}>
+            <NextIcon />
+          </IconButton>
+          <IconButton size="small" disabled>
+            <LastPageIcon />
+          </IconButton>
         </Box>
-      )}
+      </Box>
 
       {/* 编辑/新增对话框 */}
       <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)} maxWidth="sm" fullWidth>

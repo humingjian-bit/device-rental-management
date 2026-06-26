@@ -91,6 +91,12 @@ export default function DevicePage() {
     setPageToken(undefined); // 重置分页
   }, []);
 
+  // 清除高级搜索
+  const handleClearAdvancedSearch = useCallback(() => {
+    setAdvancedSearch(undefined);
+    setPageToken(undefined);
+  }, []);
+
   return (
     <Box>
       <Typography variant="h5" fontWeight="bold" gutterBottom>
@@ -104,7 +110,8 @@ export default function DevicePage() {
         isLoading={isLoading || fieldsLoading}
         error={error}
         hasMore={has_more}
-        onPageChange={() => setPageToken(page_token)}
+        nextPageToken={page_token}
+        onPageChange={(token) => setPageToken(token)}
         onRefresh={() => mutate()}
         onSearch={handleSearch}
         onAdvancedSearch={handleAdvancedSearch}
