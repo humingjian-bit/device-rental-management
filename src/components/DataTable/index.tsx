@@ -298,6 +298,7 @@ export default function DataTable({
   const [pageTokens, setPageTokens] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(0);
   const [jumpPage, setJumpPage] = useState("");
+  const [jumpTargetPage, setJumpTargetPage] = useState<number | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editRecord, setEditRecord] = useState<Record<string, unknown> | null>(null);
   const [editFields, setEditFields] = useState<Record<string, unknown>>({});
@@ -308,6 +309,7 @@ export default function DataTable({
   const resetPagination = useCallback(() => {
     setCurrentPage(0);
     setPageTokens([]);
+    setJumpTargetPage(null);
   }, []);
 
   // 防抖处理搜索输入
@@ -400,16 +402,48 @@ export default function DataTable({
     if (isNaN(target) || target < 1) return;
     if (target === 1) {
       handleFirstPage();
-    } else if (target === currentPage + 1 && hasMore) {
-      handleNextPage();
-    } else if (target > 1 && target <= pageTokens.length) {
-      // 已加载过该页的token（pageTokens[target-1] 存储了到达该页所需的token）
+      setJumpPage("");
+      return;
+    }
+    if (target > 1 && target <= pageTokens.length) {
+      // 已加载过该页的token，直接跳转
       const token = pageTokens[target - 1];
       setCurrentPage(target - 1);
       onPageChange(token);
+      setJumpPage("");
+      return;
     }
+    // 需要逐页加载到目标页，启动自动加载
+    setJumpTargetPage(target);
     setJumpPage("");
   };
+
+  // 逐页自动加载到目标页（游标分页无法直接跳转，需依次获取token）
+  useEffect(() => {
+    if (jumpTargetPage === null) return;
+    if (isLoading) return; // 等待当前请求完成
+
+    const targetPageIndex = jumpTargetPage - 1;
+
+    if (currentPage === targetPageIndex) {
+      // 已到达目标页
+      setJumpTargetPage(null);
+      return;
+    }
+
+    if (currentPage < targetPageIndex && hasMore && nextPageToken) {
+      // 继续向前加载下一页
+      const newTokens = [...pageTokens];
+      newTokens[currentPage + 1] = nextPageToken;
+      setPageTokens(newTokens);
+      setCurrentPage(currentPage + 1);
+      onPageChange(nextPageToken);
+    } else {
+      // 无法继续（没有更多页或没有token）
+      setJumpTargetPage(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jumpTargetPage, currentPage, hasMore, nextPageToken, isLoading]);
 
   // 获取可搜索的字段列表（从columns中提取）
   const searchableFields = columns.map(col => ({ display: col.headerName, value: col.field }));
