@@ -109,12 +109,13 @@ export class HuizuParser {
     }
 
     const rawStatus = String(row["订单状态"] || "").trim();
+    this.log(`第 ${rowNum} 行: 订单号=${orderNo}, 原始状态="${rawStatus}"`);
 
     // 长租过滤：租期 > 90 天跳过
     const rentalDaysRaw = row["总租用天数"];
     const rentalDays = this.extractNumber(rentalDaysRaw);
     if (rentalDays !== null && rentalDays > 90) {
-      this.log(`第 ${rowNum} 行跳过: 订单 ${orderNo} 租期 ${rentalDays} 天 > 90 天`);
+      this.log(`  → 跳过: 租期 ${rentalDays} 天 > 90 天`);
       return null;
     }
 
@@ -141,6 +142,7 @@ export class HuizuParser {
 
     // 状态映射
     const mappedStatus = this.mapStatus(rawStatus);
+    this.log(`  → 映射状态: "${mappedStatus || "(进行中)"}", 设备: ${deviceModel}, 租期: ${rentalDays}天`);
 
     return {
       platform_id: "huizu",

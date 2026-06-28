@@ -105,6 +105,7 @@ export class SyncEngine {
         if (isCanceled) {
           this.stats.skipped++;
           this.stats.skipped_reasons.push(`订单${order.order_no}已取消`);
+          this.addLog("INFO", `跳过订单 ${order.order_no}: 状态为 "${order.raw_status}"（已取消）`);
           continue;
         }
 
