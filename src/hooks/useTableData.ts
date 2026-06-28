@@ -14,7 +14,7 @@ export interface TableDataResult {
   page_tokens?: string[];  // 跳页时返回的中间页 token 列表
   isLoading: boolean;
   error: unknown;
-  mutate: () => void;
+  mutate: (data?: unknown, options?: { revalidate?: boolean }) => void;
 }
 
 export interface AdvancedSearch {
