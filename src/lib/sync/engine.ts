@@ -43,7 +43,7 @@ export class SyncEngine {
   /**
    * 执行同步
    */
-  async run(fileContent: string): Promise<SyncResult> {
+  async run(fileContent: string | Buffer): Promise<SyncResult> {
     const store = getStoreConfig(this.storeId);
     if (!store) {
       this.addLog("ERROR", `店铺配置不存在: ${this.storeId}`);

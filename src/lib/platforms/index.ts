@@ -3,6 +3,7 @@
  */
 
 import { RenrenzuParser } from "./renrenzu";
+import { HuizuParser } from "./huizu";
 import { SyncOrder } from "../sync/types";
 
 /**
@@ -11,10 +12,10 @@ import { SyncOrder } from "../sync/types";
 export interface Parser {
   /**
    * 解析文件内容
-   * @param content 文件内容
+   * @param content 文件内容（CSV 解析器接收 string，xlsx 解析器接收 Buffer）
    * @returns 订单列表
    */
-  parse(content: string): SyncOrder[];
+  parse(content: string | Buffer): SyncOrder[];
 }
 
 /**
@@ -24,9 +25,8 @@ export function getParser(platformId: string): Parser | null {
   switch (platformId) {
     case "renrenzu":
       return new RenrenzuParser();
-    // 其他平台后续添加
-    // case "huizu":
-    //   return new HuizuParser();
+    case "huizu":
+      return new HuizuParser();
     default:
       return null;
   }

@@ -20,7 +20,7 @@ stores:
         encoding: "gbk"
       - id: "huizu"
         name: "惠租"
-        enabled: false
+        enabled: true
         file_type: "xlsx"
         encoding: "utf-8"
       - id: "huizu_renewal"

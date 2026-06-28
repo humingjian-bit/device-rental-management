@@ -55,29 +55,34 @@ export async function POST(request: NextRequest) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    // 根据编码转换
-    let content: string;
-    const encoding = (platform.encoding || "utf-8").toLowerCase();
+    // 根据平台文件格式决定传递内容类型
+    const engine = new SyncEngine(storeId, platformId);
+    let result;
 
-    // 使用 iconv-lite 正确处理编码转换
-    if (encoding === "gbk" || encoding === "gb2312" || encoding === "gb18030") {
-      content = iconv.decode(buffer, "gbk");
+    if (platform.file_type === "xlsx" || platform.file_type === "xls") {
+      // xlsx 文件直接传 Buffer，由解析器内部用 xlsx 库处理
+      result = await engine.run(buffer);
     } else {
-      // 尝试 UTF-8，如果失败则尝试 GBK
-      try {
-        content = buffer.toString("utf-8");
-        // 检查是否有替换字符，说明UTF-8解析失败
-        if (content.includes("\ufffd")) {
+      // CSV 文件做编码转换后传字符串
+      const encoding = (platform.encoding || "utf-8").toLowerCase();
+      let content: string;
+
+      if (encoding === "gbk" || encoding === "gb2312" || encoding === "gb18030") {
+        content = iconv.decode(buffer, "gbk");
+      } else {
+        try {
+          content = buffer.toString("utf-8");
+          // 检查是否有替换字符，说明UTF-8解析失败
+          if (content.includes("\ufffd")) {
+            content = iconv.decode(buffer, "gbk");
+          }
+        } catch {
           content = iconv.decode(buffer, "gbk");
         }
-      } catch {
-        content = iconv.decode(buffer, "gbk");
       }
-    }
 
-    // 执行同步
-    const engine = new SyncEngine(storeId, platformId);
-    const result = await engine.run(content);
+      result = await engine.run(content);
+    }
 
     return NextResponse.json(result);
   } catch (error) {
