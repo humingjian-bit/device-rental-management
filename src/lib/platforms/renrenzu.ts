@@ -41,6 +41,15 @@ export class RenrenzuParser {
     const headers = this.parseCSVLine(lines[0]);
     this.log(`表头列名 (${headers.length} 列): ${headers.join(" | ")}`);
 
+    // 校验必要字段
+    const requiredColumns = ["订单ID", "订单状态", "型号"];
+    const missingColumns = requiredColumns.filter(col => !headers.includes(col));
+    if (missingColumns.length > 0) {
+      this.log(`❌ 表头缺少必要字段: ${missingColumns.join(", ")}`);
+      this.log(`请确认上传的是人人租平台的订单文件`);
+      return { orders, logs: this.logs };
+    }
+
     // 找到各列索引
     const colMap = this.getColumnMap(headers);
     this.log(`列映射: ${JSON.stringify(colMap)}`);

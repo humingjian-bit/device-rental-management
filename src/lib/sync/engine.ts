@@ -68,7 +68,11 @@ export class SyncEngine {
       }
 
       if (this.orders.length === 0) {
-        this.addLog("WARNING", "解析结果为空，请检查文件格式和列名是否匹配");
+        // 检查是否已有表头校验错误（解析器日志中已包含具体原因）
+        const hasHeaderError = parseResult.logs.some(l => l.includes("缺少必要字段"));
+        if (!hasHeaderError) {
+          this.addLog("WARNING", "解析结果为空，请检查文件格式和数据内容");
+        }
         return this.getResult(true);
       }
 

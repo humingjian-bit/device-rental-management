@@ -75,6 +75,15 @@ export class HuizuParser {
       const headers = Object.keys(rows[0]);
       this.log(`表头列名 (${headers.length} 列): ${headers.join(" | ")}`);
 
+      // 校验必要字段
+      const requiredColumns = ["订单号", "订单状态", "商品名称"];
+      const missingColumns = requiredColumns.filter(col => !headers.includes(col));
+      if (missingColumns.length > 0) {
+        this.log(`❌ 表头缺少必要字段: ${missingColumns.join(", ")}`);
+        this.log(`请确认上传的是惠租平台的订单文件`);
+        return { orders, logs: this.logs };
+      }
+
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
         try {
