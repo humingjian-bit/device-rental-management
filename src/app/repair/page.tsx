@@ -104,6 +104,12 @@ export default function RepairPage() {
     setPageToken(undefined); // 重置分页
   }, []);
 
+  // 清除高级搜索
+  const handleClearAdvancedSearch = useCallback(() => {
+    setAdvancedSearch(undefined);
+    setPageToken(undefined);
+  }, []);
+
   return (
     <Box>
       <Typography variant="h5" fontWeight="bold" gutterBottom>
