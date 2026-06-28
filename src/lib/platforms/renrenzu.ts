@@ -4,58 +4,65 @@
  * 参考 Python 原版逻辑实现
  */
 
-import { SyncOrder } from "../sync/types";
+import { SyncOrder, ParseResult } from "../sync/types";
 
 /**
  * 人人租解析器
  */
 export class RenrenzuParser {
+  private logs: string[] = [];
+
+  private log(msg: string) {
+    this.logs.push(`[RenrenzuParser] ${msg}`);
+    console.log(`[RenrenzuParser] ${msg}`);
+  }
+
   /**
    * 解析人人租 CSV 文件
    * @param content CSV 文件内容（GBK编码）
-   * @returns 解析后的订单列表
+   * @returns 解析结果
    */
-  parse(content: string): SyncOrder[] {
+  parse(content: string): ParseResult {
+    this.logs = [];
     const orders: SyncOrder[] = [];
 
     // 移除 BOM 头
     const cleanContent = content.replace(/^\uFEFF/, "");
-    console.log(`[RenrenzuParser] 原始内容长度: ${content.length}, 清理后: ${cleanContent.length}`);
+    this.log(`原始内容长度: ${content.length}, 清理后: ${cleanContent.length}`);
     const lines = cleanContent.trim().split("\n");
-    console.log(`[RenrenzuParser] split后行数: ${lines.length}`);
+    this.log(`split后行数: ${lines.length}`);
 
     if (lines.length < 2) {
-      return orders;
+      this.log("数据不足（少于2行），无法解析");
+      return { orders, logs: this.logs };
     }
 
     // 解析表头（第一行）
     const headers = this.parseCSVLine(lines[0]);
-    console.log("[RenrenzuParser] 表头列名:", headers);
+    this.log(`表头列名 (${headers.length} 列): ${headers.join(" | ")}`);
 
     // 找到各列索引
     const colMap = this.getColumnMap(headers);
-    console.log("[RenrenzuParser] 列映射:", colMap);
+    this.log(`列映射: ${JSON.stringify(colMap)}`);
 
     // 跳过第一行（表头），解析数据行
-    console.log(`[RenrenzuParser] 数据行数: ${lines.length - 1}`);
+    this.log(`数据行数: ${lines.length - 1}`);
     for (let i = 1; i < lines.length; i++) {
       const line = lines[i].trim();
       if (!line) continue; // 跳过空行
-      console.log(`[RenrenzuParser] 第${i + 1}行数据:`, line.substring(0, 200));
       try {
-        const order = this.parseRow(line, colMap);
+        const order = this.parseRow(line, colMap, i + 1);
         if (order) {
           orders.push(order);
-          console.log(`[RenrenzuParser] 解析成功: ${order.order_no}`);
-        } else {
-          console.log(`[RenrenzuParser] 跳过: 订单ID为空`);
         }
       } catch (e) {
-        console.error(`[RenrenzuParser] 解析第${i + 1}行失败:`, e);
+        const errMsg = e instanceof Error ? e.message : String(e);
+        this.log(`解析第${i + 1}行异常: ${errMsg}`);
       }
     }
 
-    return orders;
+    this.log(`解析完成，有效订单 ${orders.length} 条（共 ${lines.length - 1} 行数据）`);
+    return { orders, logs: this.logs };
   }
 
   /**
@@ -110,11 +117,12 @@ export class RenrenzuParser {
   /**
    * 解析单行数据
    */
-  private parseRow(line: string, colMap: Record<string, number>): SyncOrder | null {
+  private parseRow(line: string, colMap: Record<string, number>, rowNum: number): SyncOrder | null {
     const cols = this.parseCSVLine(line);
 
     const orderNo = cols[colMap["订单ID"]] || cols[colMap["订单号"]] || "";
     if (!orderNo) {
+      this.log(`第 ${rowNum} 行跳过: 订单号为空`);
       return null;
     }
 
@@ -129,6 +137,7 @@ export class RenrenzuParser {
 
     // 长租过滤：租期 > 90 天跳过
     if (rentalDays !== null && rentalDays > 90) {
+      this.log(`第 ${rowNum} 行跳过: 订单 ${orderNo} 租期 ${rentalDays} 天 > 90 天`);
       return null;
     }
 

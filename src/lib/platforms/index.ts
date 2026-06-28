@@ -4,7 +4,7 @@
 
 import { RenrenzuParser } from "./renrenzu";
 import { HuizuParser } from "./huizu";
-import { SyncOrder } from "../sync/types";
+import { SyncOrder, ParseResult } from "../sync/types";
 
 /**
  * 解析器基类
@@ -13,9 +13,9 @@ export interface Parser {
   /**
    * 解析文件内容
    * @param content 文件内容（CSV 解析器接收 string，xlsx 解析器接收 Buffer）
-   * @returns 订单列表
+   * @returns 解析结果，包含订单列表和诊断日志
    */
-  parse(content: string | Buffer): SyncOrder[];
+  parse(content: string | Buffer): ParseResult;
 }
 
 /**

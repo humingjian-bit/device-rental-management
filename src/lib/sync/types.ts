@@ -47,6 +47,14 @@ export interface SyncStats {
 }
 
 /**
+ * 解析结果（解析器返回）
+ */
+export interface ParseResult {
+  orders: SyncOrder[];
+  logs: string[];  // 解析过程中的诊断日志
+}
+
+/**
  * 同步日志条目
  */
 export interface SyncLogEntry {

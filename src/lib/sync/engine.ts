@@ -59,9 +59,16 @@ export class SyncEngine {
         return this.getResult(false);
       }
 
-      this.orders = parser.parse(fileContent);
+      const parseResult = parser.parse(fileContent);
+      this.orders = parseResult.orders;
+
+      // 将解析器的诊断日志加入引擎日志
+      for (const logMsg of parseResult.logs) {
+        this.addLog("INFO", logMsg);
+      }
+
       if (this.orders.length === 0) {
-        this.addLog("WARNING", "解析结果为空");
+        this.addLog("WARNING", "解析结果为空，请检查文件格式和列名是否匹配");
         return this.getResult(true);
       }
 

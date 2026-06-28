@@ -5,60 +5,106 @@
  */
 
 import * as XLSX from "xlsx";
-import { SyncOrder } from "../sync/types";
+import { SyncOrder, ParseResult } from "../sync/types";
 
 /**
  * 惠租解析器
  */
 export class HuizuParser {
+  private logs: string[] = [];
+
+  private log(msg: string) {
+    this.logs.push(`[HuizuParser] ${msg}`);
+    console.log(`[HuizuParser] ${msg}`);
+  }
+
   /**
    * 解析惠租 xlsx 文件
    * @param content xlsx 文件的 Buffer 或 base64 字符串
-   * @returns 解析后的订单列表
+   * @returns 解析结果
    */
-  parse(content: string | Buffer): SyncOrder[] {
+  parse(content: string | Buffer): ParseResult {
+    this.logs = [];
     const orders: SyncOrder[] = [];
 
-    // 解析 xlsx
-    const buffer = typeof content === "string" ? Buffer.from(content, "base64") : content;
-    const workbook = XLSX.read(buffer, { type: "buffer" });
+    try {
+      // 解析 xlsx
+      const buffer = typeof content === "string" ? Buffer.from(content, "base64") : content;
+      this.log(`输入类型: ${typeof content}, Buffer 大小: ${buffer.length} 字节`);
 
-    // 取第一个 sheet
-    const sheetName = workbook.SheetNames[0];
-    if (!sheetName) {
-      console.error("[HuizuParser] 未找到工作表");
-      return orders;
-    }
-
-    const sheet = workbook.Sheets[sheetName];
-    // 转为 JSON（以第一行为表头）
-    const rows: Record<string, unknown>[] = XLSX.utils.sheet_to_json(sheet, { defval: "" });
-
-    console.log(`[HuizuParser] 共读取 ${rows.length} 行数据`);
-
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
+      let workbook: XLSX.WorkBook;
       try {
-        const order = this.parseRow(row);
-        if (order) {
-          orders.push(order);
-        }
+        workbook = XLSX.read(buffer, { type: "buffer" });
       } catch (e) {
-        console.error(`[HuizuParser] 解析第${i + 2}行失败:`, e);
+        const errMsg = e instanceof Error ? e.message : String(e);
+        this.log(`XLSX.read() 失败: ${errMsg}`);
+        return { orders, logs: this.logs };
       }
+
+      this.log(`工作表数量: ${workbook.SheetNames.length}, 名称: ${workbook.SheetNames.join(", ")}`);
+
+      const sheetName = workbook.SheetNames[0];
+      if (!sheetName) {
+        this.log("未找到工作表");
+        return { orders, logs: this.logs };
+      }
+
+      const sheet = workbook.Sheets[sheetName];
+
+      // 先检查原始范围
+      const range = sheet["!ref"];
+      this.log(`工作表范围: ${range || "(空)"}`);
+
+      // 转为 JSON（以第一行为表头）
+      const rows: Record<string, unknown>[] = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+      this.log(`sheet_to_json 解析出 ${rows.length} 行数据`);
+
+      if (rows.length === 0) {
+        this.log("数据行数为 0，尝试检查原始单元格...");
+        // 输出前几个单元格帮助诊断
+        const allKeys = Object.keys(sheet).filter(k => !k.startsWith("!"));
+        this.log(`原始单元格数量: ${allKeys.length}`);
+        if (allKeys.length > 0) {
+          const sample = allKeys.slice(0, 20).map(k => `${k}=${JSON.stringify(sheet[k]?.v ?? "")}`);
+          this.log(`原始单元格样本: ${sample.join(", ")}`);
+        }
+        return { orders, logs: this.logs };
+      }
+
+      // 输出表头（列名）
+      const headers = Object.keys(rows[0]);
+      this.log(`表头列名 (${headers.length} 列): ${headers.join(" | ")}`);
+
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        try {
+          const order = this.parseRow(row, i + 2); // Excel 行号从 2 开始（1 是表头）
+          if (order) {
+            orders.push(order);
+          }
+        } catch (e) {
+          const errMsg = e instanceof Error ? e.message : String(e);
+          this.log(`解析第 ${i + 2} 行异常: ${errMsg}`);
+        }
+      }
+
+      this.log(`解析完成，有效订单 ${orders.length} 条（共 ${rows.length} 行数据）`);
+    } catch (e) {
+      const errMsg = e instanceof Error ? e.message : String(e);
+      this.log(`解析器顶层异常: ${errMsg}`);
     }
 
-    console.log(`[HuizuParser] 解析完成，有效订单 ${orders.length} 条`);
-    return orders;
+    return { orders, logs: this.logs };
   }
 
   /**
    * 解析单行数据
    */
-  private parseRow(row: Record<string, unknown>): SyncOrder | null {
+  private parseRow(row: Record<string, unknown>, rowNum: number): SyncOrder | null {
     // 按列索引获取值（xlsx sheet_to_json 以表头为 key）
     const orderNo = String(row["订单号"] || "").trim();
     if (!orderNo) {
+      this.log(`第 ${rowNum} 行跳过: 订单号为空`);
       return null; // 跳过无订单号的行
     }
 
@@ -68,6 +114,7 @@ export class HuizuParser {
     const rentalDaysRaw = row["总租用天数"];
     const rentalDays = this.extractNumber(rentalDaysRaw);
     if (rentalDays !== null && rentalDays > 90) {
+      this.log(`第 ${rowNum} 行跳过: 订单 ${orderNo} 租期 ${rentalDays} 天 > 90 天`);
       return null;
     }
 
@@ -235,7 +282,6 @@ export class HuizuParser {
     }
 
     // 4. 兜底：取第一个有意义的文本段
-    // 按空格/中文分隔，取最可能为型号的部分
     const firstWord = cleaned.split(/[\s,，]+/)[0];
     return firstWord || cleaned.substring(0, 30);
   }
