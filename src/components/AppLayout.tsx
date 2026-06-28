@@ -183,7 +183,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     </Box>
   );
 
-  const isTestEnv = process.env.NEXT_PUBLIC_APP_ENV === "test";
+  const isTestEnv = typeof window !== "undefined" && window.location.port === "3000";
 
   return (
     <ThemeProvider theme={theme}>
