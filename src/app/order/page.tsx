@@ -94,7 +94,7 @@ export default function OrderPage() {
       const data = await res.json();
       if (data.items) {
         // 通过 mutate 更新 SWR 缓存
-        mutate(data, false);
+        mutate(data, { revalidate: false });
         setPageToken(data.page_token);
         setJumpedPage(pageNumber - 1); // 0-based
         if (data.page_tokens) {

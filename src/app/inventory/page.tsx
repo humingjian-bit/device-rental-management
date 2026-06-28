@@ -70,7 +70,7 @@ export default function InventoryPage() {
       const res = await fetch(`/api/base/${storeId}/${TABLE_NAME}?${params.toString()}`, { credentials: 'include' });
       const data = await res.json();
       if (data.items) {
-        mutate(data, false);
+        mutate(data, { revalidate: false });
         setPageToken(data.page_token);
         setJumpedPage(pageNumber - 1); // 0-based
         if (data.page_tokens) {
