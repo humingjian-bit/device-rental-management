@@ -409,12 +409,13 @@ export default function SyncPage() {
                 sx={{
                   p: 2,
                   maxHeight: 400,
-                  maxWidth: 800,
                   overflow: "auto",
                   fontFamily: "monospace",
                   fontSize: 13,
                   bgcolor: "#1e1e1e",
                   color: "#d4d4d4",
+                  wordBreak: "break-all",
+                  overflowWrap: "break-word",
                 }}
               >
                 {logs.length === 0 ? (
@@ -435,7 +436,7 @@ export default function SyncPage() {
                     >
                       <Typography
                         component="span"
-                        sx={{ fontFamily: "monospace", fontSize: "0.82rem", lineHeight: 1.6, whiteSpace: "pre-wrap", display: "block" }}
+                        sx={{ fontFamily: "monospace", fontSize: "0.82rem", lineHeight: 1.6, wordBreak: "break-all", overflowWrap: "break-word", display: "block" }}
                       >
                         [{log.timestamp}] {log.message}
                       </Typography>
