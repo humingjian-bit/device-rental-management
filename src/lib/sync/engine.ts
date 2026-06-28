@@ -136,18 +136,20 @@ export class SyncEngine {
         this.addLog("INFO", `更新完成: ${updated}条`);
       }
 
-      // Step 6: 库存联动（只处理更新和新增值中有SN的）
-      this.addLog("INFO", "开始库存联动...");
+      // Step 6: 库存联动（只处理有SN编码的订单）
       const allProcessedOrders = [
         ...toCreate.map((o) => ({ order: o, record_id: "" })),
         ...toUpdate,
       ].filter((item) => item.order.sn_code);
 
-      for (const item of allProcessedOrders) {
-        await this.syncInventoryStatus(store, item.order, item.record_id);
+      if (allProcessedOrders.length > 0) {
+        this.addLog("INFO", "开始库存联动...");
+        for (const item of allProcessedOrders) {
+          await this.syncInventoryStatus(store, item.order, item.record_id);
+        }
+        this.addLog("INFO", `库存更新: ${this.stats.inventory_updated}条成功, ${this.stats.inventory_failed}条失败`);
       }
 
-      this.addLog("INFO", `库存更新: ${this.stats.inventory_updated}条成功, ${this.stats.inventory_failed}条失败`);
       this.addLog("INFO", "✅ 同步完成");
 
       return this.getResult(true);

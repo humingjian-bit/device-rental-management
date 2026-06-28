@@ -187,6 +187,7 @@ export class RenrenzuParser {
       actual_ship_date: actualShipDate || undefined,
       status: mappedStatus,
       raw_status: status,
+      express_settlement: "南通月结",
     };
   }
 

@@ -33,11 +33,10 @@ export interface AppConfig {
 let _config: AppConfig | null = null;
 
 /**
- * 获取当前运行环境
- * 优先使用 APP_ENV，其次 NEXT_PUBLIC_APP_ENV，默认 production
+ * 获取当前运行环境（仅用于日志和前端标识）
  */
 export function getAppEnv(): string {
-  return process.env.APP_ENV || process.env.NEXT_PUBLIC_APP_ENV || "production";
+  return process.env.NEXT_PUBLIC_APP_ENV || "production";
 }
 
 /**
@@ -50,11 +49,13 @@ export function isTestEnv(): boolean {
 export function loadConfig(): AppConfig {
   if (_config) return _config;
 
-  const env = getAppEnv();
-  const configFile = env === "test" ? "stores.test.yaml" : "stores.yaml";
-  const configPath = path.join(process.cwd(), `src/config/${configFile}`);
+  // 配置文件路径：优先读项目根目录 config/stores.yaml（部署环境），
+  // 否则读 src/config/stores.yaml（开发环境）
+  const configPath = fs.existsSync(path.join(process.cwd(), "config/stores.yaml"))
+    ? path.join(process.cwd(), "config/stores.yaml")
+    : path.join(process.cwd(), "src/config/stores.yaml");
 
-  console.log(`[Config] 加载环境: ${env}, 配置文件: ${configFile}`);
+  console.log(`[Config] 加载配置文件: ${configPath}`);
 
   const fileContents = fs.readFileSync(configPath, "utf8");
   const raw = YAML.parse(fileContents);
