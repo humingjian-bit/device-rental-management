@@ -409,6 +409,7 @@ export default function SyncPage() {
                 sx={{
                   p: 2,
                   maxHeight: 400,
+                  maxWidth: 800,
                   overflow: "auto",
                   fontFamily: "monospace",
                   fontSize: 13,
