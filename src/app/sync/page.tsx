@@ -425,14 +425,16 @@ export default function SyncPage() {
                     <Box
                       key={index}
                       sx={{
-                        py: 0.5,
+                        py: 0.75,
+                        px: 1,
                         color: getLogColor(log.level),
+                        borderBottom: "1px solid rgba(255,255,255,0.06)",
                         "&:hover": { bgcolor: "rgba(255,255,255,0.05)" },
                       }}
                     >
                       <Typography
                         component="span"
-                        sx={{ fontFamily: "inherit", fontSize: "inherit" }}
+                        sx={{ fontFamily: "monospace", fontSize: "0.82rem", lineHeight: 1.6, whiteSpace: "pre-wrap", display: "block" }}
                       >
                         [{log.timestamp}] {log.message}
                       </Typography>
