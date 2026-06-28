@@ -409,6 +409,8 @@ export default function SyncPage() {
                 sx={{
                   p: 2,
                   maxHeight: 400,
+                  maxWidth: 1600,
+                  width: "100%",
                   overflow: "auto",
                   fontFamily: "monospace",
                   fontSize: 13,
@@ -416,6 +418,7 @@ export default function SyncPage() {
                   color: "#d4d4d4",
                   wordBreak: "break-all",
                   overflowWrap: "break-word",
+                  boxSizing: "border-box",
                 }}
               >
                 {logs.length === 0 ? (
