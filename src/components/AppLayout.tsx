@@ -183,10 +183,33 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     </Box>
   );
 
+  const isTestEnv = process.env.NEXT_PUBLIC_APP_ENV === "test";
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Box sx={{ display: "flex", minHeight: "100vh" }}>
+      {/* 测试环境横幅 */}
+      {isTestEnv && (
+        <Box
+          sx={{
+            bgcolor: "#ff9800",
+            color: "#fff",
+            textAlign: "center",
+            py: 0.5,
+            fontSize: "0.8rem",
+            fontWeight: "bold",
+            letterSpacing: 1,
+            zIndex: 9999,
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+          }}
+        >
+          ⚠ 测试环境 — 数据与生产隔离 ⚠
+        </Box>
+      )}
+      <Box sx={{ display: "flex", minHeight: "100vh", ...(isTestEnv ? { mt: "28px" } : {}) }}>
         <Box
           component="nav"
           sx={{

@@ -32,10 +32,30 @@ export interface AppConfig {
 
 let _config: AppConfig | null = null;
 
+/**
+ * 获取当前运行环境
+ * 优先使用 APP_ENV，其次 NEXT_PUBLIC_APP_ENV，默认 production
+ */
+export function getAppEnv(): string {
+  return process.env.APP_ENV || process.env.NEXT_PUBLIC_APP_ENV || "production";
+}
+
+/**
+ * 是否为测试环境
+ */
+export function isTestEnv(): boolean {
+  return getAppEnv() === "test";
+}
+
 export function loadConfig(): AppConfig {
   if (_config) return _config;
 
-  const configPath = path.join(process.cwd(), "src/config/stores.yaml");
+  const env = getAppEnv();
+  const configFile = env === "test" ? "stores.test.yaml" : "stores.yaml";
+  const configPath = path.join(process.cwd(), `src/config/${configFile}`);
+
+  console.log(`[Config] 加载环境: ${env}, 配置文件: ${configFile}`);
+
   const fileContents = fs.readFileSync(configPath, "utf8");
   const raw = YAML.parse(fileContents);
 

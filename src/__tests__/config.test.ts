@@ -64,25 +64,25 @@ describe('config module', () => {
 
       expect(tableId).toBeDefined();
       expect(typeof tableId).toBe('string');
-      expect(tableId).toBe('tblVxflMiJ59wI51');
+      expect(tableId).toBe('tblpoOj1tmeLSxSh');
     });
 
     it('should return table id for inventory table', () => {
       const tableId = getTableId('nantong', 'inventory');
 
-      expect(tableId).toBe('tbl5PockypnrZmJw');
+      expect(tableId).toBe('tbllN5Rq33EZS7yH');
     });
 
     it('should return table id for order table', () => {
       const tableId = getTableId('nantong', 'order');
 
-      expect(tableId).toBe('tbllVh1wZWnzq7Uw');
+      expect(tableId).toBe('tblXf9BOLHL5cMpZ');
     });
 
     it('should return table id for repair table', () => {
       const tableId = getTableId('nantong', 'repair');
 
-      expect(tableId).toBe('tblbWVjbeXtJiNAp');
+      expect(tableId).toBe('tbl4PpJWhpMYweDK');
     });
 
     it('should return undefined for invalid store', () => {

@@ -1,10 +1,12 @@
+# 测试环境配置
+# 测试阶段暂时与生产共用同一套飞书表
+# 后续如需完全隔离，请将 base_token 和 tables 替换为测试专用的表
 app:
   app_id: "cli_a90ec606a4b85bd3"
-  # app_secret 从环境变量读取
 
 stores:
   - id: "nantong"
-    name: "指向-南通"
+    name: "指向-南通(测试)"
     base_token: "MhgUbzVEbaFxLFsVzmCcrUe8n6p"
     tables:
       device: "tblpoOj1tmeLSxSh"
