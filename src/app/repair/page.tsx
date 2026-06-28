@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { Box, Typography } from "@mui/material";
 import DataTable, { ColumnDef } from "@/components/DataTable";
 import { useTableData, useTableFields } from "@/hooks/useTableData";
@@ -25,12 +25,63 @@ export default function RepairPage() {
   const [pageToken, setPageToken] = useState<string | undefined>(undefined);
   const [searchKeyword, setSearchKeyword] = useState("");
   const [advancedSearch, setAdvancedSearch] = useState<{ field: string; value: string } | undefined>(undefined);
+  const [cachedTokens, setCachedTokens] = useState<string[]>([]);
+  const [isJumping, setIsJumping] = useState(false);
+  const [jumpedPage, setJumpedPage] = useState<number | undefined>(undefined);
   
-  const { items, total, has_more, isLoading, error, mutate, page_token } = useTableData(
+  const { items, total, has_more, isLoading, error, mutate, page_token, page_tokens } = useTableData(
     storeId,
     TABLE_NAME,
     { page_size: 20, page_token: pageToken, search: advancedSearch ? undefined : searchKeyword, advancedSearch }
   );
+
+  // 收集跳页返回的中间页 token
+  useEffect(() => {
+    if (page_tokens && page_tokens.length > 0) {
+      setCachedTokens(prev => {
+        const merged = [...prev];
+        for (let i = 0; i < page_tokens.length; i++) {
+          if (page_tokens[i]) merged[i] = page_tokens[i];
+        }
+        return merged;
+      });
+    }
+  }, [page_tokens]);
+
+  // 跳页处理：通过后端 page_number 快速遍历到目标页
+  const handleJumpToPage = useCallback(async (pageNumber: number) => {
+    setIsJumping(true);
+    try {
+      const params = new URLSearchParams({ page_size: "20", page_number: String(pageNumber) });
+      if (advancedSearch?.field && advancedSearch?.value) {
+        params.set("search_mode", "exact");
+        params.set("search_field", advancedSearch.field);
+        params.set("search_value", advancedSearch.value);
+      } else if (searchKeyword) {
+        params.set("search", searchKeyword);
+      }
+      const res = await fetch(`/api/base/${storeId}/${TABLE_NAME}?${params.toString()}`, { credentials: 'include' });
+      const data = await res.json();
+      if (data.items) {
+        mutate(data, false);
+        setPageToken(data.page_token);
+        setJumpedPage(pageNumber - 1); // 0-based
+        if (data.page_tokens) {
+          setCachedTokens(prev => {
+            const merged = [...prev];
+            for (let i = 0; i < data.page_tokens.length; i++) {
+              if (data.page_tokens[i]) merged[i] = data.page_tokens[i];
+            }
+            return merged;
+          });
+        }
+      }
+    } catch (e) {
+      console.error("Jump to page failed:", e);
+    } finally {
+      setIsJumping(false);
+    }
+  }, [storeId, advancedSearch, searchKeyword, mutate]);
 
   const { fields } = useTableFields(storeId, TABLE_NAME);
   
@@ -94,20 +145,26 @@ export default function RepairPage() {
   const handleSearch = useCallback((keyword: string) => {
     setSearchKeyword(keyword);
     setAdvancedSearch(undefined); // 清除高级搜索
-    setPageToken(undefined); // 重置分页
+    setPageToken(undefined);
+    setCachedTokens([]);
+    setJumpedPage(undefined); // 重置分页
   }, []);
 
   // 高级搜索处理
   const handleAdvancedSearch = useCallback((field: string, value: string) => {
     setAdvancedSearch({ field, value });
     setSearchKeyword(""); // 清除模糊搜索
-    setPageToken(undefined); // 重置分页
+    setPageToken(undefined);
+    setCachedTokens([]);
+    setJumpedPage(undefined); // 重置分页
   }, []);
 
   // 清除高级搜索
   const handleClearAdvancedSearch = useCallback(() => {
     setAdvancedSearch(undefined);
     setPageToken(undefined);
+    setCachedTokens([]);
+    setJumpedPage(undefined);
   }, []);
 
   return (
@@ -131,6 +188,10 @@ export default function RepairPage() {
         onClearAdvancedSearch={handleClearAdvancedSearch}
         onCreate={handleCreate}
         onUpdate={handleUpdate}
+        onJumpToPage={handleJumpToPage}
+        cachedTokens={cachedTokens}
+        isJumping={isJumping}
+        externalCurrentPage={jumpedPage}
         emptyDisplay="-"
         // P1-006修复：传递字段定义用于映射 formula/lookup 选项ID
         fieldDefs={fields}

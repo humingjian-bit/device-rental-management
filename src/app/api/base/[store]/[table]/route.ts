@@ -356,6 +356,7 @@ export async function GET(
   const pageToken = searchParams.get("page_token") || undefined;
   const filter = searchParams.get("filter") || undefined;
   const sort = searchParams.get("sort") || undefined;
+  const pageNumber = Number(searchParams.get("page_number")) || 0; // 跳页：直接跳到第N页（1-based）
   
   // 搜索参数
   const search = searchParams.get("search") || undefined;  // 模糊搜索关键词
@@ -620,6 +621,55 @@ export async function GET(
         totalCount = filteredItems.length;
         hasMore = filteredItems.length > pageSize;
       }
+    } else if (pageNumber > 1) {
+      // 跳页模式：快速遍历到目标页，中间页只做轻量遍历（不做完整格式化）
+      // 收集所有中间页的 token，返回给前端缓存
+      const collectedTokens: string[] = [];
+      let currentToken: string | undefined = undefined;
+      let targetResult: any = null;
+
+      for (let p = 1; p <= pageNumber; p++) {
+        const result = await listBitableRecords(store.base_token, tableId, {
+          page_size: pageSize,
+          page_token: currentToken,
+          filter: finalFilter,
+          sort,
+        });
+
+        if (p < pageNumber) {
+          // 中间页：只收集 token，不做格式化
+          if (result.page_token) {
+            collectedTokens.push(result.page_token);
+          }
+          currentToken = result.page_token || undefined;
+          totalCount = result.total;
+          hasMore = result.has_more;
+          if (!result.has_more || !result.page_token) break;
+        } else {
+          // 目标页：完整格式化
+          targetResult = result;
+        }
+      }
+
+      if (targetResult) {
+        const storeConfig = { base_token: store.base_token, tables: store.tables };
+        allItems = await Promise.all(
+          targetResult.items.map((item: Record<string, unknown>) => 
+            formatRecordAsync(item, fields, storeConfig, deviceOptionsByFieldId, deviceFields)
+          )
+        );
+        totalCount = targetResult.total;
+        hasMore = targetResult.has_more;
+        nextPageToken = targetResult.page_token;
+      }
+
+      return NextResponse.json({
+        items: allItems,
+        total: totalCount,
+        has_more: hasMore,
+        page_token: nextPageToken,
+        page_tokens: collectedTokens, // 中间页的 token 列表，前端可缓存
+      });
     } else {
       // 普通模式：正常分页获取
       const result = await listBitableRecords(store.base_token, tableId, {

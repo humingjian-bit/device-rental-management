@@ -79,6 +79,10 @@ interface DataTableProps {
   emptyDisplay?: string;
   fieldDefs?: FieldDef[];
   extraOptions?: { id: string; name: string }[];
+  onJumpToPage?: (pageNumber: number) => void;  // 跳页回调（后端快速遍历到目标页）
+  cachedTokens?: string[];  // 已缓存的中间页 token（由父组件管理）
+  isJumping?: boolean;  // 是否正在跳页加载中
+  externalCurrentPage?: number;  // 外部设置的当前页码（0-based），用于跳页后同步
 }
 
 /**
@@ -289,27 +293,52 @@ export default function DataTable({
   emptyDisplay = "-",
   fieldDefs = [],
   extraOptions = [],
+  onJumpToPage,
+  cachedTokens = [],
+  isJumping = false,
+  externalCurrentPage,
 }: DataTableProps) {
   const [searchText, setSearchText] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [advancedSearchOpen, setAdvancedSearchOpen] = useState(false);  // 高级搜索展开状态
   const [advancedField, setAdvancedField] = useState("");  // 高级搜索字段
   const [advancedValue, setAdvancedValue] = useState("");  // 高级搜索值
-  const [pageTokens, setPageTokens] = useState<string[]>([]);
+  // 使用父组件传入的 cachedTokens 作为初始值和同步源
+  const [pageTokens, setPageTokens] = useState<string[]>(cachedTokens);
   const [currentPage, setCurrentPage] = useState(0);
   const [jumpPage, setJumpPage] = useState("");
-  const [jumpTargetPage, setJumpTargetPage] = useState<number | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editRecord, setEditRecord] = useState<Record<string, unknown> | null>(null);
   const [editFields, setEditFields] = useState<Record<string, unknown>>({});
   const [isCreate, setIsCreate] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  // 同步父组件传入的 cachedTokens（合并，不覆盖已有的）
+  useEffect(() => {
+    if (cachedTokens.length > 0) {
+      setPageTokens(prev => {
+        const merged = [...prev];
+        for (let i = 0; i < cachedTokens.length; i++) {
+          if (cachedTokens[i] && !merged[i]) {
+            merged[i] = cachedTokens[i];
+          }
+        }
+        return merged;
+      });
+    }
+  }, [cachedTokens]);
+
+  // 同步父组件设置的当前页码（用于跳页后更新）
+  useEffect(() => {
+    if (externalCurrentPage !== undefined && externalCurrentPage !== currentPage) {
+      setCurrentPage(externalCurrentPage);
+    }
+  }, [externalCurrentPage]);
+
   // 重置分页状态（搜索时调用）
   const resetPagination = useCallback(() => {
     setCurrentPage(0);
     setPageTokens([]);
-    setJumpTargetPage(null);
   }, []);
 
   // 防抖处理搜索输入
@@ -406,44 +435,19 @@ export default function DataTable({
       return;
     }
     if (target > 1 && target <= pageTokens.length) {
-      // 已加载过该页的token，直接跳转
+      // 已缓存该页的token，直接跳转（秒跳）
       const token = pageTokens[target - 1];
       setCurrentPage(target - 1);
       onPageChange(token);
       setJumpPage("");
       return;
     }
-    // 需要逐页加载到目标页，启动自动加载
-    setJumpTargetPage(target);
-    setJumpPage("");
+    // 未缓存：委托父组件通过后端 page_number 快速遍历到目标页
+    if (onJumpToPage) {
+      onJumpToPage(target);
+      setJumpPage("");
+    }
   };
-
-  // 逐页自动加载到目标页（游标分页无法直接跳转，需依次获取token）
-  useEffect(() => {
-    if (jumpTargetPage === null) return;
-    if (isLoading) return; // 等待当前请求完成
-
-    const targetPageIndex = jumpTargetPage - 1;
-
-    if (currentPage === targetPageIndex) {
-      // 已到达目标页
-      setJumpTargetPage(null);
-      return;
-    }
-
-    if (currentPage < targetPageIndex && hasMore && nextPageToken) {
-      // 继续向前加载下一页
-      const newTokens = [...pageTokens];
-      newTokens[currentPage + 1] = nextPageToken;
-      setPageTokens(newTokens);
-      setCurrentPage(currentPage + 1);
-      onPageChange(nextPageToken);
-    } else {
-      // 无法继续（没有更多页或没有token）
-      setJumpTargetPage(null);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jumpTargetPage, currentPage, hasMore, nextPageToken, isLoading]);
 
   // 获取可搜索的字段列表（从columns中提取）
   const searchableFields = columns.map(col => ({ display: col.headerName, value: col.field }));
@@ -718,8 +722,8 @@ export default function DataTable({
             sx={{ width: 60, mx: 0.5 }}
             inputProps={{ style: { padding: "4px 8px", textAlign: "center" } }}
           />
-          <Button size="small" variant="text" onClick={handleJumpToPage} sx={{ minWidth: 0, px: 1 }}>
-            跳转
+          <Button size="small" variant="text" onClick={handleJumpToPage} disabled={isJumping} sx={{ minWidth: 0, px: 1 }}>
+            {isJumping ? "跳转中..." : "跳转"}
           </Button>
           <IconButton size="small" onClick={handleNextPage} disabled={!hasMore}>
             <NextIcon />

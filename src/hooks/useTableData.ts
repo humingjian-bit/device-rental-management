@@ -11,6 +11,7 @@ export interface TableDataResult {
   total: number;
   has_more: boolean;
   page_token?: string;
+  page_tokens?: string[];  // 跳页时返回的中间页 token 列表
   isLoading: boolean;
   error: unknown;
   mutate: () => void;
@@ -33,6 +34,7 @@ export function useTableData(
   params?: {
     page_size?: number;
     page_token?: string;
+    page_number?: number;  // 跳页：直接跳到第N页
     filter?: string;
     sort?: string;
     search?: string;  // 模糊搜索关键字
@@ -54,6 +56,7 @@ export function useTableData(
   const searchParams = new URLSearchParams();
   if (params?.page_size) searchParams.set("page_size", String(params.page_size));
   if (params?.page_token) searchParams.set("page_token", params.page_token);
+  if (params?.page_number) searchParams.set("page_number", String(params.page_number));
   if (params?.filter) searchParams.set("filter", params.filter);
   if (params?.sort) searchParams.set("sort", params.sort);
   // 支持全局搜索参数
@@ -99,6 +102,7 @@ export function useTableData(
     total: data?.total || 0,
     has_more: data?.has_more || false,
     page_token: data?.page_token,
+    page_tokens: data?.page_tokens,
     isLoading,
     error,
     mutate,
