@@ -13,10 +13,8 @@ import {
   TableHead,
   TableRow,
   Paper,
-  Alert,
   CircularProgress,
   IconButton,
-  Chip,
 } from "@mui/material";
 import {
   Search as SearchIcon,
@@ -66,7 +64,8 @@ export default function PrintLabelPage() {
 
   // 打印状态
   const [printingSn, setPrintingSn] = useState<string | null>(null);
-  const [lastPrintedSn, setLastPrintedSn] = useState<string | null>(null);
+  const [cooldownSn, setCooldownSn] = useState<string | null>(null);
+  const cooldownTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const initAttempted = useRef(false);
 
@@ -136,38 +135,21 @@ export default function PrintLabelPage() {
     setFilteredDevices([]);
 
     try {
-      // 获取全部设备数据（前端过滤）
-      const allItems: DeviceRecord[] = [];
-      let pageToken: string | undefined;
-      let hasMore = true;
-
-      while (hasMore) {
-        const params = new URLSearchParams({
-          page_size: "100",
-        });
-        if (pageToken) params.set("page_token", pageToken);
-
-        const res = await fetch(`/api/base/${storeId}/device?${params}`);
-        const data = await res.json();
-
-        if (data.items) {
-          allItems.push(...data.items);
-        }
-
-        hasMore = data.has_more && !!data.page_token;
-        pageToken = data.page_token;
-      }
-
-      setAllDevices(allItems);
-
-      // 前端过滤：SN 包含搜索值
-      const keyword = searchValue.trim().toLowerCase();
-      const filtered = allItems.filter((item) => {
-        const sn = extractFieldValue(item.SN编码);
-        return sn && sn.toLowerCase().includes(keyword);
+      // 使用后端精确搜索（服务端筛选，速度快）
+      const keyword = searchValue.trim();
+      const params = new URLSearchParams({
+        search_mode: "exact",
+        search_field: "SN编码",
+        search_value: keyword,
+        page_size: "50",
       });
 
-      setFilteredDevices(filtered);
+      const res = await fetch(`/api/base/${storeId}/device?${params}`);
+      const data = await res.json();
+
+      const items: DeviceRecord[] = data.items || [];
+      setAllDevices(items);
+      setFilteredDevices(items);
     } catch (e: any) {
       console.error("搜索失败:", e);
     } finally {
@@ -182,14 +164,19 @@ export default function PrintLabelPage() {
     if (!sn) return;
 
     setPrintingSn(sn);
-    setLastPrintedSn(null);
+    setCooldownSn(null);
+    if (cooldownTimer.current) clearTimeout(cooldownTimer.current);
 
     try {
       const labelData = buildDeviceLabel(storeName, model || "未知型号", sn);
       await printLabel(labelData, {}, (progress: PrintProgress) => {
         if (progress.type === "done") {
-          setLastPrintedSn(sn);
           setPrintingSn(null);
+          // 3 秒冷却后才允许再次打印
+          setCooldownSn(sn);
+          cooldownTimer.current = setTimeout(() => {
+            setCooldownSn(null);
+          }, 3000);
         } else if (progress.type === "error") {
           console.error("打印错误:", progress.msg);
           setPrintingSn(null);
@@ -317,7 +304,7 @@ export default function PrintLabelPage() {
                     const sn = extractFieldValue(device.SN编码) || "-";
                     const model = extractFieldValue(device.设备型号) || "-";
                     const isPrinting = printingSn === sn;
-                    const isLastPrinted = lastPrintedSn === sn;
+                    const isCoolingDown = cooldownSn === sn;
 
                     return (
                       <TableRow key={device.record_id || idx} hover>
@@ -328,20 +315,12 @@ export default function PrintLabelPage() {
                         <TableCell align="center">
                           {isPrinting ? (
                             <CircularProgress size={20} />
-                          ) : isLastPrinted ? (
-                            <Chip
-                              icon={<CheckCircleIcon />}
-                              label="已打印"
-                              color="success"
-                              size="small"
-                              variant="outlined"
-                            />
                           ) : (
                             <IconButton
-                              color="primary"
-                              onClick={() => handlePrint(device)}
-                              disabled={printerStatus !== "ready"}
-                              title="打印标签"
+                              color={isCoolingDown ? "default" : "primary"}
+                              onClick={() => !isCoolingDown && handlePrint(device)}
+                              disabled={printerStatus !== "ready" || isCoolingDown}
+                              title={isCoolingDown ? "3秒后可重新打印" : "打印标签"}
                             >
                               <PrintIcon />
                             </IconButton>

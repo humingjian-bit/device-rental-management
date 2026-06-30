@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Select,
   ThemeProvider,
@@ -185,7 +185,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     </Box>
   );
 
-  const isTestEnv = typeof window !== "undefined" && window.location.port === "3000";
+  const [isTestEnv, setIsTestEnv] = useState(false);
+  useEffect(() => {
+    setIsTestEnv(window.location.port === "3000");
+  }, []);
 
   return (
     <ThemeProvider theme={theme}>
