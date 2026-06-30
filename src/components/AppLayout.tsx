@@ -36,6 +36,7 @@ import {
   ChevronLeft as ChevronLeftIcon,
   ChevronRight as ChevronRightIcon,
   Logout as LogoutIcon,
+  LocalOffer as LabelIcon,
 } from "@mui/icons-material";
 import { useRouter, usePathname } from "next/navigation";
 import { useCurrentStore, useStores, useAuth } from "@/hooks/useStore";
@@ -50,6 +51,7 @@ const menuItems = [
   { key: "/order", icon: <OrderIcon />, label: "订单管理" },
   { key: "/repair", icon: <RepairIcon />, label: "维修管理" },
   { key: "/sync", icon: <SyncIcon />, label: "更新订单" },
+  { key: "/print-label", icon: <LabelIcon />, label: "标签打印" },
 ];
 
 const theme = createTheme({
