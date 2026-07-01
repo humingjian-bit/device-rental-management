@@ -19,18 +19,20 @@ export function isServiceConnected(): boolean {
 }
 
 /**
- * 断开打印服务（清理旧的 WebSocket 连接，用于页面重新进入时重置 SDK 状态）
+ * 断开打印服务（关闭 WebSocket + 清理 SDK 状态，用于页面重新进入时重置）
  */
 export function disconnectService(): void {
   try {
-    if (typeof (window as any).removeAllListeners === 'function') {
-      (window as any).removeAllListeners();
+    if (typeof isWebSocketConnected === 'function' && isWebSocketConnected()) {
+      (APIServiceState as any).websocket?.close();
     }
   } catch (_) { /* ignore */ }
+  // 清理 SDK 内部状态
   try {
-    if (typeof (window as any).disconnect === 'function') {
-      (window as any).disconnect();
-    }
+    (APIServiceState as any).ackJsonData = '';
+    (APIServiceState as any).MessageList = {};
+    (APIServiceState as any).jobListeners?.clear();
+    (APIServiceState as any).statusListeners?.clear();
   } catch (_) { /* ignore */ }
 }
 

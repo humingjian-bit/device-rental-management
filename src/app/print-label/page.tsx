@@ -103,7 +103,10 @@ export default function PrintLabelPage() {
         setTimeout(() => reject(new Error("连接打印服务超时，请确认精臣打印服务已启动")), 5000);
       });
 
-      // Step 2: 获取打印机列表（重试 3 次，SDK 重新连接后可能需要时间枚举设备）
+      // Step 2: 初始化 SDK（必须在获取打印机列表之前完成，否则 SDK 未就绪）
+      await initSdkService();
+
+      // Step 3: 获取打印机列表（重试 3 次，SDK 初始化后可能需要时间枚举设备）
       let printers: { name: string; port: number }[] = [];
       for (let attempt = 0; attempt < 3; attempt++) {
         printers = await getPrinters();
@@ -116,12 +119,9 @@ export default function PrintLabelPage() {
       const pName = printers[0].name;
       const pPort = printers[0].port;
 
-      // Step 3: 连接打印机
+      // Step 4: 连接打印机
       await connectPrinter(pName, parseInt(String(pPort)));
       setPrinterName(pName);
-
-      // Step 4: 初始化 SDK
-      await initSdkService();
 
       setPrinterStatus("ready");
       initInProgress.current = false;
