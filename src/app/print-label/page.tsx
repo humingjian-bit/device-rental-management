@@ -15,6 +15,8 @@ import {
   Paper,
   CircularProgress,
   IconButton,
+  Checkbox,
+  LinearProgress,
 } from "@mui/material";
 import {
   Search as SearchIcon,
@@ -30,7 +32,7 @@ import {
   getPrinters,
   connectPrinter,
   initSdkService,
-  printLabel,
+  printBatchLabels,
   buildDeviceLabel,
   isServiceConnected,
   type PrintProgress,
@@ -62,10 +64,16 @@ export default function PrintLabelPage() {
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
 
-  // 打印状态
+  // 多选
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // 批量打印状态
+  const [batchPrinting, setBatchPrinting] = useState(false);
+  const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
+
+  // 单张打印状态（兼容单条打印按钮）
   const [printingSn, setPrintingSn] = useState<string | null>(null);
-  const [cooldownSn, setCooldownSn] = useState<string | null>(null);
-  const cooldownTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const initInProgress = useRef(false);
 
   // 获取当前店铺名
@@ -88,10 +96,6 @@ export default function PrintLabelPage() {
     setErrorMsg("");
 
     try {
-      // Step 1: 连接打印服务
-      // 注意：不调用 disconnectService()，因为 SDK 的 close 处理器会触发自动重连，
-      // 旧实例的重连定时器会和新的 getInstance 冲突导致通信混乱。
-      // getInstance 会创建新 WebSocket 覆盖旧的，直接调用即可。
       await new Promise<void>((resolve, reject) => {
         connectService(
           () => resolve(),
@@ -101,10 +105,8 @@ export default function PrintLabelPage() {
         setTimeout(() => reject(new Error("连接打印服务超时，请确认精臣打印服务已启动")), 5000);
       });
 
-      // Step 2: 初始化 SDK（必须在获取打印机列表之前完成，否则 SDK 未就绪）
       await initSdkService();
 
-      // Step 3: 获取打印机列表（重试 3 次，SDK 初始化后可能需要时间枚举设备）
       let printers: { name: string; port: number }[] = [];
       for (let attempt = 0; attempt < 3; attempt++) {
         printers = await getPrinters();
@@ -117,10 +119,8 @@ export default function PrintLabelPage() {
       const pName = printers[0].name;
       const pPort = printers[0].port;
 
-      // Step 4: 连接打印机
       await connectPrinter(pName, parseInt(String(pPort)));
       setPrinterName(pName);
-
       setPrinterStatus("ready");
       initInProgress.current = false;
     } catch (e: any) {
@@ -130,9 +130,7 @@ export default function PrintLabelPage() {
     }
   }, []);
 
-  // 组件挂载时：检查 SDK 是否已加载（处理页面切换回来的场景）
   useEffect(() => {
-    // 重置状态，确保即使 ref 跨 mount 持久化也能重新初始化
     initInProgress.current = false;
     setSdkLoaded(false);
 
@@ -141,7 +139,6 @@ export default function PrintLabelPage() {
       initPrinter();
     }
 
-    // visibilitychange: 切回页面时自动检测并重连
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible" && typeof getInstance === "function") {
         initPrinter();
@@ -156,7 +153,6 @@ export default function PrintLabelPage() {
     };
   }, [initPrinter]);
 
-  // SDK Script 首次加载完成时触发
   const handleScriptReady = () => {
     setSdkLoaded(true);
     if (!initInProgress.current) {
@@ -170,11 +166,11 @@ export default function PrintLabelPage() {
     setLoading(true);
     setSearched(true);
     setFilteredDevices([]);
+    setSelectedIds(new Set()); // 搜索条件变化时清空已选
 
     try {
       const keyword = searchValue.trim();
 
-      // 优先用飞书 search API（contains 子串匹配，速度快）
       const params = new URLSearchParams({
         search_mode: "exact",
         search_field: "SN编码",
@@ -187,7 +183,6 @@ export default function PrintLabelPage() {
 
       let items: DeviceRecord[] = data.items || [];
 
-      // 如果 search API 返回空结果，回退到模糊搜索（前端过滤）
       if (items.length === 0) {
         const fuzzyParams = new URLSearchParams({
           search: keyword,
@@ -207,26 +202,74 @@ export default function PrintLabelPage() {
     }
   };
 
-  // ============ 打印 ============
-  const handlePrint = async (device: DeviceRecord) => {
+  // ============ 多选逻辑 ============
+  const handleToggleSelect = (recordId: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(recordId)) {
+        next.delete(recordId);
+      } else {
+        next.add(recordId);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectedIds.size === filteredDevices.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredDevices.map(d => d.record_id)));
+    }
+  };
+
+  const selectedDevices = filteredDevices.filter(d => selectedIds.has(d.record_id));
+  const allSelected = filteredDevices.length > 0 && selectedIds.size === filteredDevices.length;
+
+  // ============ 批量打印 ============
+  const handleBatchPrint = async () => {
+    if (selectedDevices.length === 0 || batchPrinting) return;
+
+    setBatchPrinting(true);
+    setBatchProgress({ current: 0, total: selectedDevices.length });
+
+    const labels = selectedDevices.map(device => {
+      const sn = extractFieldValue(device.SN编码);
+      const model = extractFieldValue(device.设备型号);
+      return buildDeviceLabel(storeName, model || "未知型号", sn || "UNKNOWN");
+    });
+
+    try {
+      await printBatchLabels(labels, {}, (progress: PrintProgress) => {
+        if (progress.type === "page_done") {
+          setBatchProgress({ current: progress.currentPage || 0, total: progress.totalPages || 0 });
+        } else if (progress.type === "done") {
+          setBatchPrinting(false);
+          setSelectedIds(new Set());
+        } else if (progress.type === "error") {
+          console.error("[BatchPrint] 错误:", progress.msg);
+          // 单页错误不中止，继续打印
+        }
+      });
+    } catch (e: any) {
+      console.error("批量打印失败:", e);
+      setBatchPrinting(false);
+    }
+  };
+
+  // ============ 单张打印（兼容） ============
+  const handlePrintSingle = async (device: DeviceRecord) => {
     const sn = extractFieldValue(device.SN编码);
     const model = extractFieldValue(device.设备型号);
-    if (!sn) return;
+    if (!sn || batchPrinting) return;
 
     setPrintingSn(sn);
-    setCooldownSn(null);
-    if (cooldownTimer.current) clearTimeout(cooldownTimer.current);
 
     try {
       const labelData = buildDeviceLabel(storeName, model || "未知型号", sn);
-      await printLabel(labelData, {}, (progress: PrintProgress) => {
+      await printBatchLabels([labelData], {}, (progress: PrintProgress) => {
         if (progress.type === "done") {
           setPrintingSn(null);
-          // 3 秒冷却后才允许再次打印
-          setCooldownSn(sn);
-          cooldownTimer.current = setTimeout(() => {
-            setCooldownSn(null);
-          }, 3000);
         } else if (progress.type === "error") {
           console.error("打印错误:", progress.msg);
           setPrintingSn(null);
@@ -238,14 +281,14 @@ export default function PrintLabelPage() {
     }
   };
 
-  // 回车搜索
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") handleSearch();
   };
 
+  const isLocked = batchPrinting;
+
   return (
     <>
-      {/* 动态加载 SDK 脚本 */}
       <Script
         src="/js/api/jcPrinterSdk_api_third.js"
         strategy="afterInteractive"
@@ -304,13 +347,13 @@ export default function PrintLabelPage() {
               onChange={(e) => setSearchValue(e.target.value)}
               onKeyDown={handleKeyDown}
               sx={{ flexGrow: 1, maxWidth: 400 }}
-              disabled={printerStatus !== "ready"}
+              disabled={printerStatus !== "ready" || isLocked}
             />
             <Button
               variant="contained"
               startIcon={<SearchIcon />}
               onClick={handleSearch}
-              disabled={printerStatus !== "ready" || !searchValue.trim()}
+              disabled={printerStatus !== "ready" || !searchValue.trim() || isLocked}
             >
               搜索
             </Button>
@@ -326,66 +369,117 @@ export default function PrintLabelPage() {
         )}
 
         {searched && !loading && (
-          <TableContainer component={Paper}>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell sx={{ fontWeight: "bold" }}>SN 编码</TableCell>
-                  <TableCell sx={{ fontWeight: "bold" }}>设备型号</TableCell>
-                  <TableCell sx={{ fontWeight: "bold" }} align="center">
-                    操作
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {filteredDevices.length === 0 ? (
+          <>
+            <TableContainer component={Paper}>
+              <Table size="small">
+                <TableHead>
                   <TableRow>
-                    <TableCell colSpan={3} align="center" sx={{ py: 4 }}>
-                      <Typography color="text.secondary">
-                        {searchValue ? "未找到匹配的设备" : "请输入 SN 编码搜索"}
-                      </Typography>
+                    <TableCell padding="checkbox">
+                      <Checkbox
+                        checked={allSelected}
+                        indeterminate={selectedIds.size > 0 && selectedIds.size < filteredDevices.length}
+                        onChange={handleSelectAll}
+                        disabled={isLocked}
+                      />
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: "bold" }}>SN 编码</TableCell>
+                    <TableCell sx={{ fontWeight: "bold" }}>设备型号</TableCell>
+                    <TableCell sx={{ fontWeight: "bold" }} align="center">
+                      操作
                     </TableCell>
                   </TableRow>
-                ) : (
-                  filteredDevices.map((device, idx) => {
-                    const sn = extractFieldValue(device.SN编码) || "-";
-                    const model = extractFieldValue(device.设备型号) || "-";
-                    const isPrinting = printingSn === sn;
-                    const isCoolingDown = cooldownSn === sn;
+                </TableHead>
+                <TableBody>
+                  {filteredDevices.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={4} align="center" sx={{ py: 4 }}>
+                        <Typography color="text.secondary">
+                          {searchValue ? "未找到匹配的设备" : "请输入 SN 编码搜索"}
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredDevices.map((device, idx) => {
+                      const sn = extractFieldValue(device.SN编码) || "-";
+                      const model = extractFieldValue(device.设备型号) || "-";
+                      const isSelected = selectedIds.has(device.record_id);
+                      const isPrinting = printingSn === sn;
 
-                    return (
-                      <TableRow key={device.record_id || idx} hover>
-                        <TableCell>
-                          <Typography fontFamily="monospace">{sn}</Typography>
-                        </TableCell>
-                        <TableCell>{model}</TableCell>
-                        <TableCell align="center">
-                          {isPrinting ? (
-                            <CircularProgress size={20} />
-                          ) : (
-                            <IconButton
-                              color={isCoolingDown ? "default" : "primary"}
-                              onClick={() => !isCoolingDown && handlePrint(device)}
-                              disabled={printerStatus !== "ready" || isCoolingDown}
-                              title={isCoolingDown ? "3秒后可重新打印" : "打印标签"}
-                            >
-                              <PrintIcon />
-                            </IconButton>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        )}
+                      return (
+                        <TableRow
+                          key={device.record_id || idx}
+                          hover
+                          selected={isSelected}
+                          sx={{ cursor: "pointer" }}
+                          onClick={() => !isLocked && handleToggleSelect(device.record_id)}
+                        >
+                          <TableCell padding="checkbox">
+                            <Checkbox
+                              checked={isSelected}
+                              disabled={isLocked}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={() => handleToggleSelect(device.record_id)}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Typography fontFamily="monospace">{sn}</Typography>
+                          </TableCell>
+                          <TableCell>{model}</TableCell>
+                          <TableCell align="center">
+                            {isPrinting ? (
+                              <CircularProgress size={20} />
+                            ) : (
+                              <IconButton
+                                color="primary"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handlePrintSingle(device);
+                                }}
+                                disabled={printerStatus !== "ready" || isLocked}
+                                title="打印此标签"
+                              >
+                                <PrintIcon />
+                              </IconButton>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
 
-        {searched && !loading && filteredDevices.length > 0 && (
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            共找到 {filteredDevices.length} 条匹配记录
-          </Typography>
+            {/* 底部操作栏 */}
+            <Box sx={{ mt: 2, display: "flex", alignItems: "center", gap: 2 }}>
+              <Button
+                variant="contained"
+                size="large"
+                startIcon={batchPrinting ? <CircularProgress size={20} color="inherit" /> : <PrintIcon />}
+                onClick={handleBatchPrint}
+                disabled={selectedDevices.length === 0 || isLocked || printerStatus !== "ready"}
+                sx={{ minWidth: 200 }}
+              >
+                {batchPrinting
+                  ? `打印中 ${batchProgress.current}/${batchProgress.total}...`
+                  : `🖨 批量打印选中 (${selectedDevices.length})`}
+              </Button>
+
+              {batchPrinting && (
+                <Box sx={{ flexGrow: 1, maxWidth: 300 }}>
+                  <LinearProgress
+                    variant="determinate"
+                    value={batchProgress.total > 0 ? (batchProgress.current / batchProgress.total) * 100 : 0}
+                    sx={{ height: 8, borderRadius: 4 }}
+                  />
+                </Box>
+              )}
+
+              <Typography variant="body2" color="text.secondary">
+                共 {filteredDevices.length} 条记录{selectedIds.size > 0 && `，已选 ${selectedIds.size} 项`}
+              </Typography>
+            </Box>
+          </>
         )}
       </Box>
     </>

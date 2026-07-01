@@ -93,7 +93,11 @@ export async function initSdkService(): Promise<void> {
 
 /** 打印进度回调 */
 export interface PrintProgress {
-  type: 'progress' | 'done' | 'error';
+  type: 'progress' | 'done' | 'error' | 'page_done';
+  /** 当前已完成页码（从1开始） */
+  currentPage?: number;
+  /** 总页数 */
+  totalPages?: number;
   copies?: number;
   pages?: number;
   total?: number;
@@ -103,20 +107,27 @@ export interface PrintProgress {
 }
 
 /**
- * 打印单张标签
+ * 批量打印标签（核心函数）
+ * 一个 startJob 内循环多张标签，打印机连续出纸，效率最高。
+ *
+ * @param labels 标签数据数组，每张标签一个 LabelData
+ * @param options 打印参数
+ * @param onProgress 进度回调
  */
-export async function printLabel(
-  labelData: LabelData,
+export async function printBatchLabels(
+  labels: LabelData[],
   options: { density?: number; labelType?: number; printMode?: number } = {},
   onProgress?: (progress: PrintProgress) => void
 ): Promise<void> {
+  if (!labels || labels.length === 0) return;
+
   const density = options.density || 3;
   const labelType = options.labelType || 1;
   const printMode = options.printMode || 2; // M2 必须用热转印=2
-  const totalPages = 1;
+  const totalPages = labels.length;
   const printQuantity = jsonObj.printerImageProcessingInfo.printQuantity;
 
-  let currentIndex = 0;
+  let currentPage = 0; // 已提交的页数（0-based index）
   let listener: ((msg: JobListenerMessage) => void) | null = null;
 
   if (onProgress) {
@@ -124,39 +135,43 @@ export async function printLabel(
       const ack = msg?.resultAck;
       if (!ack) return;
 
-      // daemon 推送就绪信号
+      // daemon 推送就绪信号 → 发送下一页数据
       if (msg.apiName === 'commitJob' && ack.info === 'commitJob ok!') {
-        if (currentIndex < totalPages) {
+        if (currentPage < totalPages) {
           try {
-            await sendPageData(labelData);
-            currentIndex++;
+            await sendPageData(labels[currentPage]);
+            currentPage++;
+            onProgress({ type: 'page_done', currentPage, totalPages });
           } catch (e: any) {
-            onProgress({ type: 'error', msg: e.message });
+            // 单页失败不中止整个任务，跳过继续
+            console.error(`[Printer] 第 ${currentPage + 1}/${totalPages} 页打印失败:`, e.message);
+            currentPage++;
+            onProgress({ type: 'error', currentPage, totalPages, msg: e.message });
           }
         }
         return;
       }
 
-      // 打印进度
+      // 打印进度（打印机硬件回调）
       if (ack.printCopies != null && ack.printPages != null) {
-        onProgress({ type: 'progress', copies: ack.printCopies, pages: ack.printPages, total: totalPages });
+        onProgress({ type: 'progress', copies: ack.printCopies, pages: ack.printPages, totalPages });
       }
 
       // 全部完成
       if (ack.printCopies === printQuantity && ack.printPages === totalPages) {
         try {
           const end = await endJob();
-          onProgress({ type: 'done', result: end.resultAck });
+          onProgress({ type: 'done', result: end.resultAck, totalPages });
         } catch (e: any) {
-          onProgress({ type: 'error', msg: e.message });
+          onProgress({ type: 'error', msg: e.message, totalPages });
         } finally {
           if (listener) removeJobListener(listener);
         }
       }
 
-      // 错误
+      // 错误（非 commitJob ok 的 errorCode != 0）
       if (ack.errorCode !== 0 && ack.info !== 'commitJob ok!') {
-        onProgress({ type: 'error', errorCode: ack.errorCode, msg: ack.info });
+        onProgress({ type: 'error', errorCode: ack.errorCode, msg: ack.info, totalPages });
       }
     };
     addJobListener(listener);
@@ -171,6 +186,17 @@ export async function printLabel(
     if (listener) removeJobListener(listener);
     throw e;
   }
+}
+
+/**
+ * 打印单张标签（便捷方法）
+ */
+export async function printLabel(
+  labelData: LabelData,
+  options: { density?: number; labelType?: number; printMode?: number } = {},
+  onProgress?: (progress: PrintProgress) => void
+): Promise<void> {
+  return printBatchLabels([labelData], options, onProgress);
 }
 
 // ============ 内部方法 ============
@@ -256,7 +282,7 @@ export function buildDeviceLabel(storeName: string, deviceModel: string, sn: str
           height: 7.9,
           width: 25,
           value: sn,
-          codeType: 20,       // EAN13
+          codeType: 20,       // CODE128（支持字母数字混合）
           rotate: 0,
           fontSize: 3.2,
           textHeight: 3.2,
