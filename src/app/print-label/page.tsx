@@ -134,11 +134,28 @@ export default function PrintLabelPage() {
 
   // 组件挂载时：检查 SDK 是否已加载（处理页面切换回来的场景）
   useEffect(() => {
+    // 重置状态，确保即使 ref 跨 mount 持久化也能重新初始化
+    initInProgress.current = false;
+    setSdkLoaded(false);
+
     if (typeof getInstance === "function") {
-      // SDK 全局函数已存在（之前已加载过），直接初始化
       setSdkLoaded(true);
       initPrinter();
     }
+
+    // visibilitychange: 切回页面时自动检测并重连
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible" && typeof getInstance === "function") {
+        initPrinter();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      initInProgress.current = false;
+      setSdkLoaded(false);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, [initPrinter]);
 
   // SDK Script 首次加载完成时触发
@@ -270,7 +287,7 @@ export default function PrintLabelPage() {
                 size="small"
                 variant="outlined"
                 startIcon={<RefreshIcon />}
-                onClick={() => initPrinter()}
+                onClick={() => { initInProgress.current = false; initPrinter(); }}
                 sx={{ ml: 1 }}
               >
                 重试
