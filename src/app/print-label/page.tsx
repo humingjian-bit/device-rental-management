@@ -27,6 +27,7 @@ import Script from "next/script";
 import { useCurrentStore, useStores } from "@/hooks/useStore";
 import {
   connectService,
+  disconnectService,
   getPrinters,
   connectPrinter,
   initSdkService,
@@ -86,21 +87,26 @@ export default function PrintLabelPage() {
     setErrorMsg("");
 
     try {
-      // Step 1: 连接打印服务
+      // 先断开旧的 WebSocket 连接（页面切换后可能已失效）
+      disconnectService();
+      // 短暂等待 SDK 清理
+      await new Promise(r => setTimeout(r, 300));
+
+      // Step 1: 连接打印服务（创建全新 WebSocket 连接）
       await new Promise<void>((resolve, reject) => {
         connectService(
           () => resolve(),
           (err) => reject(new Error(err)),
           () => {} // disconnect 忽略
         );
-        // 给 WebSocket 连接 3 秒超时
-        setTimeout(() => reject(new Error("连接打印服务超时")), 3000);
+        // 给 WebSocket 连接 5 秒超时
+        setTimeout(() => reject(new Error("连接打印服务超时，请确认精臣打印服务已启动")), 5000);
       });
 
       // Step 2: 获取打印机列表
       const printers = await getPrinters();
       if (!printers || printers.length === 0) {
-        throw new Error("未检测到 USB 打印机，请检查打印机连接");
+        throw new Error("未检测到打印机，请检查 USB 连接后重试");
       }
       const pName = printers[0].name;
       const pPort = printers[0].port;
@@ -127,6 +133,21 @@ export default function PrintLabelPage() {
     }
   }, [sdkLoaded, initPrinter]);
 
+  // 页面重新可见时自动重连（切换标签页/切换页面回来）
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible" && sdkLoaded) {
+        // 如果当前不是 ready 状态，尝试重新连接
+        if (!isServiceConnected()) {
+          initAttempted.current = false;
+          initPrinter();
+        }
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [sdkLoaded, initPrinter]);
+
   // ============ 搜索设备 ============
   const handleSearch = async () => {
     if (!searchValue.trim()) return;
@@ -135,8 +156,9 @@ export default function PrintLabelPage() {
     setFilteredDevices([]);
 
     try {
-      // 使用后端精确搜索（服务端筛选，速度快）
       const keyword = searchValue.trim();
+
+      // 优先用飞书 search API（contains 子串匹配，速度快）
       const params = new URLSearchParams({
         search_mode: "exact",
         search_field: "SN编码",
@@ -147,7 +169,19 @@ export default function PrintLabelPage() {
       const res = await fetch(`/api/base/${storeId}/device?${params}`);
       const data = await res.json();
 
-      const items: DeviceRecord[] = data.items || [];
+      let items: DeviceRecord[] = data.items || [];
+
+      // 如果 search API 返回空结果，回退到模糊搜索（前端过滤）
+      if (items.length === 0) {
+        const fuzzyParams = new URLSearchParams({
+          search: keyword,
+          page_size: "50",
+        });
+        const fuzzyRes = await fetch(`/api/base/${storeId}/device?${fuzzyParams}`);
+        const fuzzyData = await fuzzyRes.json();
+        items = fuzzyData.items || [];
+      }
+
       setAllDevices(items);
       setFilteredDevices(items);
     } catch (e: any) {

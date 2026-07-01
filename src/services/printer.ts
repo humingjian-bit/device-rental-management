@@ -19,6 +19,22 @@ export function isServiceConnected(): boolean {
 }
 
 /**
+ * 断开打印服务（清理旧的 WebSocket 连接，用于页面重新进入时重置 SDK 状态）
+ */
+export function disconnectService(): void {
+  try {
+    if (typeof (window as any).removeAllListeners === 'function') {
+      (window as any).removeAllListeners();
+    }
+  } catch (_) { /* ignore */ }
+  try {
+    if (typeof (window as any).disconnect === 'function') {
+      (window as any).disconnect();
+    }
+  } catch (_) { /* ignore */ }
+}
+
+/**
  * 连接打印服务
  */
 export function connectService(
