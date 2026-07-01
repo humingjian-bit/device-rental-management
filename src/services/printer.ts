@@ -19,20 +19,20 @@ export function isServiceConnected(): boolean {
 }
 
 /**
- * 断开打印服务（关闭 WebSocket + 清理 SDK 状态，用于页面重新进入时重置）
+ * 断开打印服务（安全关闭 WebSocket）
+ *
+ * ⚠️ 注意：SDK 的 close 处理器会自动触发 reconnect（setInterval 每3秒创建新 WebSocket），
+ * 直接 close() 会导致旧实例的重连定时器与新的 getInstance 冲突。
+ * 因此 initPrinter 流程中不应调用此函数，仅在组件卸载时使用。
  */
 export function disconnectService(): void {
   try {
-    if (typeof isWebSocketConnected === 'function' && isWebSocketConnected()) {
-      APIServiceState.websocket?.close();
+    if (typeof APIServiceState !== 'undefined' && APIServiceState.websocket) {
+      const ws = APIServiceState.websocket;
+      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+        ws.close();
+      }
     }
-  } catch (_) { /* ignore */ }
-  // 清理 SDK 内部状态
-  try {
-    APIServiceState.ackJsonData = '';
-    APIServiceState.MessageList = {};
-    APIServiceState.jobListeners?.clear();
-    APIServiceState.statusListeners?.clear();
   } catch (_) { /* ignore */ }
 }
 

@@ -27,7 +27,6 @@ import Script from "next/script";
 import { useCurrentStore, useStores } from "@/hooks/useStore";
 import {
   connectService,
-  disconnectService,
   getPrinters,
   connectPrinter,
   initSdkService,
@@ -89,11 +88,10 @@ export default function PrintLabelPage() {
     setErrorMsg("");
 
     try {
-      // 先断开旧的 WebSocket 连接（页面切换后可能已失效）
-      disconnectService();
-      await new Promise(r => setTimeout(r, 500));
-
-      // Step 1: 连接打印服务（创建全新 WebSocket 连接）
+      // Step 1: 连接打印服务
+      // 注意：不调用 disconnectService()，因为 SDK 的 close 处理器会触发自动重连，
+      // 旧实例的重连定时器会和新的 getInstance 冲突导致通信混乱。
+      // getInstance 会创建新 WebSocket 覆盖旧的，直接调用即可。
       await new Promise<void>((resolve, reject) => {
         connectService(
           () => resolve(),
