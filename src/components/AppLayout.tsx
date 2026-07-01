@@ -166,7 +166,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               item={item}
               collapsed={collapsed}
               selected={pathname === item.key}
-              onClick={() => router.push(item.key)}
+              onClick={() => { if (item.key === "/print-label") { window.location.href = item.key; } else { router.push(item.key); } }}
             />
           </ListItem>
         ))}
