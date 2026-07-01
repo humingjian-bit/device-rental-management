@@ -4,6 +4,16 @@
  * 通过 next/script 在打印页面动态加载
  */
 
+// SDK 内部状态对象（用于 disconnectService 关闭 WebSocket）
+declare const APIServiceState: {
+  websocket: WebSocket | null;
+  ackJsonData: string;
+  MessageList: Record<string, unknown>;
+  jobListeners: Set<unknown>;
+  statusListeners: Set<unknown>;
+  timeout_duration: number;
+};
+
 interface PrinterResultAck {
   errorCode: number;
   info?: string;

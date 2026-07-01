@@ -24,15 +24,15 @@ export function isServiceConnected(): boolean {
 export function disconnectService(): void {
   try {
     if (typeof isWebSocketConnected === 'function' && isWebSocketConnected()) {
-      (APIServiceState as any).websocket?.close();
+      APIServiceState.websocket?.close();
     }
   } catch (_) { /* ignore */ }
   // 清理 SDK 内部状态
   try {
-    (APIServiceState as any).ackJsonData = '';
-    (APIServiceState as any).MessageList = {};
-    (APIServiceState as any).jobListeners?.clear();
-    (APIServiceState as any).statusListeners?.clear();
+    APIServiceState.ackJsonData = '';
+    APIServiceState.MessageList = {};
+    APIServiceState.jobListeners?.clear();
+    APIServiceState.statusListeners?.clear();
   } catch (_) { /* ignore */ }
 }
 
