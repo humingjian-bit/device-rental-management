@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { Box, Typography } from "@mui/material";
+import { useRouter } from "next/navigation";
+import { Box, Typography, Button } from "@mui/material";
+import { Print as PrintIcon } from "@mui/icons-material";
 import DataTable, { ColumnDef } from "@/components/DataTable";
 import { useTableData, useTableFields } from "@/hooks/useTableData";
 import { useCurrentStore } from "@/hooks/useStore";
@@ -25,6 +27,8 @@ const deviceColumns: ColumnDef[] = [
 
 export default function DevicePage() {
   const { storeId } = useCurrentStore();
+  const router = useRouter();
+  const [selectedRows, setSelectedRows] = useState<Record<string, unknown>[]>([]);
   const [pageToken, setPageToken] = useState<string | undefined>(undefined);
   const [searchKeyword, setSearchKeyword] = useState("");
   const [advancedSearch, setAdvancedSearch] = useState<{ field: string; value: string } | undefined>(undefined);
@@ -154,6 +158,21 @@ export default function DevicePage() {
     setJumpedPage(undefined);
   }, []);
 
+  // 推送选中设备到标签打印页
+  const handlePrintSelected = useCallback(() => {
+    if (selectedRows.length === 0) return;
+    const devices = selectedRows.map((row) => ({
+      _record_id: String(row._record_id || ""),
+      SN编码: row["SN编码"],
+      设备型号: row["设备型号"],
+    }));
+    localStorage.setItem("pending_print_devices", JSON.stringify({
+      timestamp: Date.now(),
+      devices,
+    }));
+    window.location.href = "/print-label?from=device";
+  }, [selectedRows]);
+
   return (
     <Box>
       <Typography variant="h5" fontWeight="bold" gutterBottom>
@@ -181,6 +200,20 @@ export default function DevicePage() {
         emptyDisplay="-"
         // P1-006修复：传递字段定义用于映射 formula/lookup 选项ID
         fieldDefs={fields}
+        selectable
+        onSelectionChange={setSelectedRows}
+        toolbarExtra={
+          selectedRows.length > 0 ? (
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={<PrintIcon />}
+              onClick={handlePrintSelected}
+            >
+              🖨 打印选中 ({selectedRows.length})
+            </Button>
+          ) : null
+        }
       />
     </Box>
   );

@@ -19,6 +19,7 @@ import {
   Button,
   CircularProgress,
   Typography,
+  Checkbox,
   Chip,
   MenuItem,
   FormControl,
@@ -83,6 +84,9 @@ interface DataTableProps {
   cachedTokens?: string[];  // 已缓存的中间页 token（由父组件管理）
   isJumping?: boolean;  // 是否正在跳页加载中
   externalCurrentPage?: number;  // 外部设置的当前页码（0-based），用于跳页后同步
+  selectable?: boolean;
+  onSelectionChange?: (selectedRows: Record<string, unknown>[]) => void;
+  toolbarExtra?: React.ReactNode;
 }
 
 /**
@@ -297,6 +301,9 @@ export default function DataTable({
   cachedTokens = [],
   isJumping = false,
   externalCurrentPage,
+  selectable,
+  onSelectionChange,
+  toolbarExtra,
 }: DataTableProps) {
   const [searchText, setSearchText] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -312,6 +319,41 @@ export default function DataTable({
   const [editFields, setEditFields] = useState<Record<string, unknown>>({});
   const [isCreate, setIsCreate] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // 多选状态
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // 选择变化时通知父组件
+  useEffect(() => {
+    if (onSelectionChange) {
+      const selected = rows.filter((r, i) =>
+        selectedIds.has(String(r._record_id ?? i))
+      );
+      onSelectionChange(selected);
+    }
+  }, [selectedIds, rows, onSelectionChange]);
+
+  const handleToggleRow = (row: Record<string, unknown>, idx: number) => {
+    const key = String(row._record_id ?? idx);
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const handleSelectAllRows = () => {
+    if (rows.length === 0) return;
+    if (allRowsSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(rows.map((r, i) => String(r._record_id ?? i))));
+    }
+  };
+
+  const allRowsSelected = rows.length > 0 && selectedIds.size === rows.length;
+  const someRowsSelected = selectedIds.size > 0 && selectedIds.size < rows.length;
 
   // 同步父组件传入的 cachedTokens（合并，不覆盖已有的）
   useEffect(() => {
@@ -507,7 +549,7 @@ export default function DataTable({
     setEditFields((prev) => ({ ...prev, [field]: event.target.value }));
   };
 
-  const colSpan = columns.length + (onUpdate ? 1 : 0);
+  const colSpan = columns.length + (onUpdate ? 1 : 0) + (selectable ? 1 : 0);
 
   return (
     <Box>
@@ -596,7 +638,8 @@ export default function DataTable({
             </Typography>
           )}
         </Box>
-        <Box sx={{ display: "flex", gap: 1 }}>
+        <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+          {toolbarExtra}
           <IconButton onClick={onRefresh} title="刷新">
             <RefreshIcon />
           </IconButton>
@@ -618,6 +661,16 @@ export default function DataTable({
         <Table size="small" stickyHeader>
           <TableHead>
             <TableRow>
+              {selectable && (
+                <TableCell padding="checkbox" sx={{ minWidth: "auto !important" }}>
+                  <Checkbox
+                    checked={allRowsSelected}
+                    indeterminate={someRowsSelected}
+                    onChange={handleSelectAllRows}
+                    size="small"
+                  />
+                </TableCell>
+              )}
               {columns.map((col) => (
                 <TableCell
                   key={col.field}
@@ -660,7 +713,20 @@ export default function DataTable({
                 };
                 
                 return (
-                  <TableRow key={String(row._record_id || idx)} hover>
+                  <TableRow
+                    key={String(row._record_id ?? idx)}
+                    hover
+                    selected={selectable ? selectedIds.has(String(row._record_id ?? idx)) : false}
+                  >
+                    {selectable && (
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          checked={selectedIds.has(String(row._record_id ?? idx))}
+                          onChange={() => handleToggleRow(row, idx)}
+                          size="small"
+                        />
+                      </TableCell>
+                    )}
                     {columns.map((col) => {
                       const fieldDef = getFieldDef(col.field);
                       return (

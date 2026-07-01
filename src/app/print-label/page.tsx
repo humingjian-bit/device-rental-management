@@ -17,6 +17,7 @@ import {
   IconButton,
   Checkbox,
   LinearProgress,
+  Alert,
 } from "@mui/material";
 import {
   Search as SearchIcon,
@@ -79,6 +80,9 @@ export default function PrintLabelPage() {
 
   // 单张打印状态（兼容单条打印按钮）
   const [printingSn, setPrintingSn] = useState<string | null>(null);
+
+  // 从设备管理页推送的设备
+  const [pendingDevicesCount, setPendingDevicesCount] = useState(0);
 
   const initInProgress = useRef(false);
 
@@ -158,6 +162,29 @@ export default function PrintLabelPage() {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [initPrinter]);
+
+  // 从设备管理页接收推送的设备
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("pending_print_devices");
+      if (!raw) return;
+      localStorage.removeItem("pending_print_devices");
+      const data = JSON.parse(raw);
+      const devices: DeviceRecord[] = data.devices || [];
+      // 超过1小时的数据视为过期，直接丢弃
+      if (data.timestamp && Date.now() - data.timestamp > 3600000) return;
+      if (devices.length > 0) {
+        setFilteredDevices(devices);
+        setAllDevices(devices);
+        setSearched(true);
+        setSelectedIds(new Set(devices.map((d, i) => getRecordId(d, i))));
+        setPendingDevicesCount(devices.length);
+      }
+    } catch (e) {
+      console.error("解析推送设备数据失败:", e);
+      localStorage.removeItem("pending_print_devices");
+    }
+  }, []);
 
   const handleScriptReady = () => {
     setSdkLoaded(true);
@@ -342,6 +369,13 @@ export default function PrintLabelPage() {
             </>
           )}
         </Paper>
+
+        {/* 设备管理推送提示 */}
+        {pendingDevicesCount > 0 && (
+          <Alert severity="info" sx={{ mb: 2 }} onClose={() => setPendingDevicesCount(0)}>
+            已从设备管理接收 {pendingDevicesCount} 台设备，全部默认勾选
+          </Alert>
+        )}
 
         {/* 搜索区域 */}
         <Paper sx={{ p: 2, mb: 3 }}>
