@@ -229,7 +229,7 @@ export default function PrintLabelPage() {
     }
   };
 
-  const selectedDevices = filteredDevices.filter(d => selectedIds.has(d.record_id));
+  const selectedDevices = filteredDevices.filter((d, i) => selectedIds.has(getRecordId(d, i)));
   const allSelected = filteredDevices.length > 0 && selectedIds.size === filteredDevices.length;
 
   // ============ 批量打印 ============
