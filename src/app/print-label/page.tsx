@@ -67,8 +67,7 @@ export default function PrintLabelPage() {
   const [printingSn, setPrintingSn] = useState<string | null>(null);
   const [cooldownSn, setCooldownSn] = useState<string | null>(null);
   const cooldownTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const initAttempted = useRef(false);
+  const initInProgress = useRef(false);
 
   // 获取当前店铺名
   const currentStore = stores.find((s) => s.id === storeId);
@@ -76,10 +75,13 @@ export default function PrintLabelPage() {
 
   // ============ 初始化打印机 ============
   const initPrinter = useCallback(async () => {
-    if (!sdkLoaded) return;
+    if (initInProgress.current) return;
+    initInProgress.current = true;
+
     if (typeof getInstance !== "function") {
       setPrinterStatus("error");
       setErrorMsg("SDK 未加载，请刷新页面重试");
+      initInProgress.current = false;
       return;
     }
 
@@ -89,22 +91,25 @@ export default function PrintLabelPage() {
     try {
       // 先断开旧的 WebSocket 连接（页面切换后可能已失效）
       disconnectService();
-      // 短暂等待 SDK 清理
-      await new Promise(r => setTimeout(r, 300));
+      await new Promise(r => setTimeout(r, 500));
 
       // Step 1: 连接打印服务（创建全新 WebSocket 连接）
       await new Promise<void>((resolve, reject) => {
         connectService(
           () => resolve(),
           (err) => reject(new Error(err)),
-          () => {} // disconnect 忽略
+          () => {}
         );
-        // 给 WebSocket 连接 5 秒超时
         setTimeout(() => reject(new Error("连接打印服务超时，请确认精臣打印服务已启动")), 5000);
       });
 
-      // Step 2: 获取打印机列表
-      const printers = await getPrinters();
+      // Step 2: 获取打印机列表（重试 3 次，SDK 重新连接后可能需要时间枚举设备）
+      let printers: { name: string; port: number }[] = [];
+      for (let attempt = 0; attempt < 3; attempt++) {
+        printers = await getPrinters();
+        if (printers && printers.length > 0) break;
+        await new Promise(r => setTimeout(r, 1000));
+      }
       if (!printers || printers.length === 0) {
         throw new Error("未检测到打印机，请检查 USB 连接后重试");
       }
@@ -119,34 +124,30 @@ export default function PrintLabelPage() {
       await initSdkService();
 
       setPrinterStatus("ready");
+      initInProgress.current = false;
     } catch (e: any) {
       setPrinterStatus("error");
       setErrorMsg(e.message || "初始化失败");
+      initInProgress.current = false;
     }
-  }, [sdkLoaded]);
+  }, []);
 
-  // SDK 加载完成后自动初始化
+  // 组件挂载时：检查 SDK 是否已加载（处理页面切换回来的场景）
   useEffect(() => {
-    if (sdkLoaded && !initAttempted.current) {
-      initAttempted.current = true;
+    if (typeof getInstance === "function") {
+      // SDK 全局函数已存在（之前已加载过），直接初始化
+      setSdkLoaded(true);
       initPrinter();
     }
-  }, [sdkLoaded, initPrinter]);
+  }, [initPrinter]);
 
-  // 页面重新可见时自动重连（切换标签页/切换页面回来）
-  useEffect(() => {
-    const handleVisibility = () => {
-      if (document.visibilityState === "visible" && sdkLoaded) {
-        // 如果当前不是 ready 状态，尝试重新连接
-        if (!isServiceConnected()) {
-          initAttempted.current = false;
-          initPrinter();
-        }
-      }
-    };
-    document.addEventListener("visibilitychange", handleVisibility);
-    return () => document.removeEventListener("visibilitychange", handleVisibility);
-  }, [sdkLoaded, initPrinter]);
+  // SDK Script 首次加载完成时触发
+  const handleScriptReady = () => {
+    setSdkLoaded(true);
+    if (!initInProgress.current) {
+      initPrinter();
+    }
+  };
 
   // ============ 搜索设备 ============
   const handleSearch = async () => {
@@ -233,7 +234,7 @@ export default function PrintLabelPage() {
       <Script
         src="/js/api/jcPrinterSdk_api_third.js"
         strategy="afterInteractive"
-        onReady={() => setSdkLoaded(true)}
+        onReady={handleScriptReady}
         onError={() => {
           setPrinterStatus("error");
           setErrorMsg("SDK 加载失败");
@@ -269,10 +270,7 @@ export default function PrintLabelPage() {
                 size="small"
                 variant="outlined"
                 startIcon={<RefreshIcon />}
-                onClick={() => {
-                  initAttempted.current = false;
-                  initPrinter();
-                }}
+                onClick={() => initPrinter()}
                 sx={{ ml: 1 }}
               >
                 重试
