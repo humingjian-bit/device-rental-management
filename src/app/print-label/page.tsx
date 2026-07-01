@@ -41,10 +41,16 @@ import {
 type PrinterStatus = "connecting" | "ready" | "error";
 
 interface DeviceRecord {
-  record_id: string;
+  _record_id?: string;
+  record_id?: string;
   SN编码?: string | string[];
   设备型号?: string | string[];
   [key: string]: unknown;
+}
+
+/** 安全获取记录的 record_id（兼容 _record_id 和 record_id 两种命名） */
+function getRecordId(device: DeviceRecord, fallback: string | number): string {
+  return device._record_id || device.record_id || String(fallback);
 }
 
 export default function PrintLabelPage() {
@@ -219,7 +225,7 @@ export default function PrintLabelPage() {
     if (selectedIds.size === filteredDevices.length) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(filteredDevices.map(d => d.record_id)));
+      setSelectedIds(new Set(filteredDevices.map((d, i) => getRecordId(d, i))));
     }
   };
 
@@ -400,25 +406,26 @@ export default function PrintLabelPage() {
                     </TableRow>
                   ) : (
                     filteredDevices.map((device, idx) => {
+                      const id = getRecordId(device, idx);
                       const sn = extractFieldValue(device.SN编码) || "-";
                       const model = extractFieldValue(device.设备型号) || "-";
-                      const isSelected = selectedIds.has(device.record_id);
+                      const isSelected = selectedIds.has(id);
                       const isPrinting = printingSn === sn;
 
                       return (
                         <TableRow
-                          key={device.record_id || idx}
+                          key={id}
                           hover
                           selected={isSelected}
                           sx={{ cursor: "pointer" }}
-                          onClick={() => !isLocked && handleToggleSelect(device.record_id)}
+                          onClick={() => !isLocked && handleToggleSelect(id)}
                         >
                           <TableCell padding="checkbox">
                             <Checkbox
                               checked={isSelected}
                               disabled={isLocked}
                               onClick={(e) => e.stopPropagation()}
-                              onChange={() => handleToggleSelect(device.record_id)}
+                              onChange={() => handleToggleSelect(id)}
                             />
                           </TableCell>
                           <TableCell>
