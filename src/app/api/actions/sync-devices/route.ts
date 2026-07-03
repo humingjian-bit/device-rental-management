@@ -50,7 +50,8 @@ export async function POST(
     } while (deviceToken);
 
     // 2. 获取库存表全部记录（分页遍历）
-    const inventoryMap = new Map<string, string>(); // SN → record_id
+    const inventoryMap = new Map<string, string[]>(); // SN → record_id[]（可能有重复SN）
+    let totalInventoryRecords = 0;
     let invToken: string | undefined;
     do {
       const result = await listBitableRecords(store.base_token, inventoryTableId, {
@@ -60,8 +61,14 @@ export async function POST(
       for (const item of result.items) {
         const sn = extractStringField(item["SN编码"]);
         const recordId = item._record_id ? String(item._record_id) : "";
+        totalInventoryRecords++;
         if (sn && recordId) {
-          inventoryMap.set(sn, recordId);
+          const existing = inventoryMap.get(sn);
+          if (existing) {
+            existing.push(recordId);
+          } else {
+            inventoryMap.set(sn, [recordId]);
+          }
         }
       }
       invToken = result.has_more ? result.page_token : undefined;
@@ -78,10 +85,15 @@ export async function POST(
       }
     }
 
-    // 库存表有但设备表没有 → 删除
-    for (const [sn, recordId] of inventoryMap) {
+    // 库存表有但设备表没有 → 全部删除
+    // 设备表有但库存有多条重复 → 只保留1条，其余删除
+    for (const [sn, recordIds] of inventoryMap) {
       if (!deviceSNs.has(sn)) {
-        toDeleteIds.push(recordId);
+        // 设备表没有这个SN → 删除所有库存记录
+        toDeleteIds.push(...recordIds);
+      } else if (recordIds.length > 1) {
+        // 有重复SN → 只保留第一条，删除其余的
+        toDeleteIds.push(...recordIds.slice(1));
       }
     }
 
@@ -110,6 +122,7 @@ export async function POST(
     }
 
     const unchanged = deviceSNs.size - added;
+    const duplicateSNs = Array.from(inventoryMap.values()).filter(ids => ids.length > 1).length;
 
     return NextResponse.json({
       success: true,
@@ -117,7 +130,9 @@ export async function POST(
       deleted,
       unchanged,
       total_devices: deviceSNs.size,
-      total_inventory: inventoryMap.size,
+      total_inventory: totalInventoryRecords,
+      inventory_unique_sns: inventoryMap.size,
+      duplicate_sn_count: duplicateSNs,
     });
   } catch (error: any) {
     console.error("[sync-devices] 同步失败:", error);

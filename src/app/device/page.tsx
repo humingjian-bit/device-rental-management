@@ -184,7 +184,11 @@ export default function DevicePage() {
       const res = await fetch(`/api/actions/sync-devices?store=${storeId}`, { method: "POST" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "同步失败");
-      setSyncResult(`同步完成：新增 ${data.added} 条，删除 ${data.deleted} 条，未变 ${data.unchanged} 条`);
+      let msg = `同步完成：新增 ${data.added} 条，删除 ${data.deleted} 条，未变 ${data.unchanged} 条`;
+      if (data.duplicate_sn_count > 0) {
+        msg += `（清理了 ${data.duplicate_sn_count} 个重复SN）`;
+      }
+      setSyncResult(msg);
       // 刷新表格数据
       mutate();
     } catch (e: any) {
