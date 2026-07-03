@@ -2,8 +2,8 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Box, Typography, Button } from "@mui/material";
-import { Print as PrintIcon } from "@mui/icons-material";
+import { Box, Typography, Button, CircularProgress } from "@mui/material";
+import { Print as PrintIcon, Sync as SyncIcon } from "@mui/icons-material";
 import DataTable, { ColumnDef } from "@/components/DataTable";
 import { useTableData, useTableFields } from "@/hooks/useTableData";
 import { useCurrentStore } from "@/hooks/useStore";
@@ -29,6 +29,8 @@ export default function DevicePage() {
   const { storeId } = useCurrentStore();
   const router = useRouter();
   const [selectedRows, setSelectedRows] = useState<Record<string, unknown>[]>([]);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<string | null>(null);
   const [pageToken, setPageToken] = useState<string | undefined>(undefined);
   const [searchKeyword, setSearchKeyword] = useState("");
   const [advancedSearch, setAdvancedSearch] = useState<{ field: string; value: string } | undefined>(undefined);
@@ -173,6 +175,25 @@ export default function DevicePage() {
     window.location.href = "/print-label?from=device";
   }, [selectedRows]);
 
+  // 同步设备表与库存表
+  const handleSyncDevices = useCallback(async () => {
+    if (syncing) return;
+    setSyncing(true);
+    setSyncResult(null);
+    try {
+      const res = await fetch(`/api/actions/sync-devices?store=${storeId}`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "同步失败");
+      setSyncResult(`同步完成：新增 ${data.added} 条，删除 ${data.deleted} 条，未变 ${data.unchanged} 条`);
+      // 刷新表格数据
+      mutate();
+    } catch (e: any) {
+      setSyncResult(`同步失败：${e.message}`);
+    } finally {
+      setSyncing(false);
+    }
+  }, [syncing, storeId, mutate]);
+
   return (
     <Box>
       <Typography variant="h5" fontWeight="bold" gutterBottom>
@@ -203,16 +224,33 @@ export default function DevicePage() {
         selectable
         onSelectionChange={setSelectedRows}
         toolbarExtra={
-          selectedRows.length > 0 ? (
+          <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
             <Button
-              variant="contained"
+              variant="outlined"
               size="small"
-              startIcon={<PrintIcon />}
-              onClick={handlePrintSelected}
+              startIcon={syncing ? <CircularProgress size={16} color="inherit" /> : <SyncIcon />}
+              onClick={handleSyncDevices}
+              disabled={syncing}
+              title="以设备表为主，同步库存表（新增缺失、删除多余）"
             >
-              🖨 打印选中 ({selectedRows.length})
+              {syncing ? "同步中..." : "同步库存"}
             </Button>
-          ) : null
+            {selectedRows.length > 0 && (
+              <Button
+                variant="contained"
+                size="small"
+                startIcon={<PrintIcon />}
+                onClick={handlePrintSelected}
+              >
+                🖨 打印选中 ({selectedRows.length})
+              </Button>
+            )}
+            {syncResult && (
+              <Typography variant="body2" color={syncResult.includes("失败") ? "error" : "success.main"}>
+                {syncResult}
+              </Typography>
+            )}
+          </Box>
         }
       />
     </Box>

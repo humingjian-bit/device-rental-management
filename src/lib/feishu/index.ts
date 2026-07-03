@@ -308,6 +308,45 @@ export async function batchCreateBitableRecords(
 }
 
 /**
+ * 批量删除记录
+ */
+export async function batchDeleteBitableRecords(
+  appToken: string,
+  tableId: string,
+  recordIds: string[],
+  tokenType: "tenant" | "user" = "tenant"
+): Promise<void> {
+  if (recordIds.length === 0) return;
+
+  const accessToken =
+    tokenType === "tenant" ? await getTenantAccessToken() : "";
+
+  // 飞书 API 限制每次最多删除 500 条
+  const batchSize = 500;
+  for (let i = 0; i < recordIds.length; i += batchSize) {
+    const batch = recordIds.slice(i, i + batchSize);
+    const res = await fetch(
+      `${FEISHU_API_BASE}/bitable/v1/apps/${appToken}/tables/${tableId}/records/batch_delete`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ records: batch }),
+      }
+    );
+
+    const data = await res.json();
+    if (data.code !== 0) {
+      const errorStr = JSON.stringify(data);
+      console.error("[batchDeleteBitableRecords] 飞书返回错误:", errorStr);
+      throw new Error(`Failed to batch delete records: ${data.msg} | 详情: ${errorStr.slice(0, 800)}`);
+    }
+  }
+}
+
+/**
  * 批量更新记录
  */
 export async function batchUpdateRecords(
