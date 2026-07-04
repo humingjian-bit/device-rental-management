@@ -13,13 +13,14 @@ export function useCurrentStore() {
     if (stores.length === 0) return;
 
     const saved = localStorage.getItem("current_store");
-    // 校验：localStorage里的ID必须在当前店铺列表中存在，否则用第一个
+    // 铁律：只有用户明确选过的店铺（localStorage有记录且有效）才自动恢复
+    // 没选过就保持空，不自动选第一个
     const isValid = saved && stores.some((s: { id: string }) => s.id === saved);
-    const targetId = isValid ? saved : stores[0].id;
-
-    setStoreId(targetId);
-    if (!isValid) {
-      localStorage.setItem("current_store", targetId);
+    if (isValid && saved) {
+      setStoreId(saved);
+    } else {
+      setStoreId("");
+      localStorage.removeItem("current_store");
     }
   }, [stores]);
 

@@ -275,8 +275,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <FormControl size="small" sx={{ minWidth: 160, mr: 2 }}>
                 <InputLabel>当前店铺</InputLabel>
                 <Select
-                  value={storeId}
+                  value={storeId || ""}
                   label="当前店铺"
+                  displayEmpty
+                  renderValue={(value) => {
+                    if (!value) return <em style={{ color: "text.secondary" }}>请选择店铺</em>;
+                    const s = stores.find((x: { id: string }) => x.id === value);
+                    return s ? s.name : value;
+                  }}
                   onChange={(e) => switchStore(e.target.value)}
                 >
                   {stores.map((s) => (
@@ -306,7 +312,22 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </AppBar>
           <Box sx={{ flexGrow: 1, p: 3, bgcolor: "#f5f5f5" }}>
             <Box sx={{ p: 3, bgcolor: "#fff", borderRadius: 2, minHeight: "calc(100vh - 120px)" }}>
-              {children}
+              {isAuthenticated && !authLoading && stores.length > 0 && !storeId ? (
+                <Box sx={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  minHeight: "calc(100vh - 200px)",
+                  color: "text.secondary",
+                }}>
+                  <StoreIcon sx={{ fontSize: 64, mb: 2, opacity: 0.3 }} />
+                  <Typography variant="h6" gutterBottom>请先选择店铺</Typography>
+                  <Typography variant="body2">在右上角下拉框中选择一个店铺以查看数据</Typography>
+                </Box>
+              ) : (
+                children
+              )}
             </Box>
           </Box>
         </Box>
