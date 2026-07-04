@@ -49,13 +49,36 @@ export function isTestEnv(): boolean {
 export function loadConfig(): AppConfig {
   if (_config) return _config;
 
-  // 配置文件路径：优先读项目根目录 config/stores.yaml（部署环境），
-  // 否则读 src/config/stores.yaml（开发环境）
-  const configPath = fs.existsSync(path.join(process.cwd(), "config/stores.yaml"))
-    ? path.join(process.cwd(), "config/stores.yaml")
-    : path.join(process.cwd(), "src/config/stores.yaml");
+  const isProd = process.env.NODE_ENV === "production";
 
-  console.log(`[Config] 加载配置文件: ${configPath}`);
+  // 部署环境优先读项目根目录 config/stores.yaml
+  const deployConfigPath = path.join(process.cwd(), "config/stores.yaml");
+  // 开发环境读 src/config/stores.yaml
+  const devConfigPath = path.join(process.cwd(), "src/config/stores.yaml");
+
+  let configPath: string | null = null;
+
+  if (fs.existsSync(deployConfigPath)) {
+    configPath = deployConfigPath;
+  } else if (!isProd && fs.existsSync(devConfigPath)) {
+    configPath = devConfigPath;
+  }
+
+  if (!configPath) {
+    if (isProd) {
+      throw new Error(
+        `[Config] 生产环境配置文件缺失：${deployConfigPath}\n` +
+        `请确保部署环境 config/stores.yaml 存在且配置正确。`
+      );
+    } else {
+      throw new Error(
+        `[Config] 开发环境配置文件缺失：${devConfigPath}\n` +
+        `请从 src/config/stores.yaml.example 复制一份并配置。`
+      );
+    }
+  }
+
+  console.log(`[Config] 加载配置文件: ${configPath} (env: ${isProd ? "production" : "development"})`);
 
   const fileContents = fs.readFileSync(configPath, "utf8");
   const raw = YAML.parse(fileContents);
