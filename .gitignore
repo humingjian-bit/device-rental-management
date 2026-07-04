@@ -31,3 +31,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+# 环境配置（每个部署环境独立维护，不进git）
+config/stores.yaml
+config/users.yaml

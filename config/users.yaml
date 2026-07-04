@@ -1,4 +1,0 @@
-users:
-  - username: admin
-    password_hash: '$2b$12$rl.UqoR5/qTMZaqo4itxLueanhNXSFouH.GgZjRmbZJw1zURLXxYa'
-    role: admin
