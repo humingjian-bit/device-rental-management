@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import useSWR from "swr";
-import { useSearchParams } from "next/navigation";
 
 const fetcher = (url: string) => fetch(url, { credentials: 'include' }).then((r) => r.json());
 
@@ -24,6 +23,7 @@ export interface AdvancedSearch {
 
 /**
  * 通用表格数据 hook
+ * 注意：所有 Hook 必须在顶层调用，严禁条件 return，否则违反 React Hook 规则导致 #311 错误
  * @param storeId 店铺ID
  * @param tableName 表名 (device/inventory/order/repair)
  * @param params 查询参数
@@ -41,57 +41,53 @@ export function useTableData(
     advancedSearch?: AdvancedSearch;  // 高级搜索（精确匹配）
   }
 ): TableDataResult {
-  // P1-001修复：storeId为空时返回默认状态，避免发送无效请求
-  if (!storeId) {
-    return {
-      items: [],
-      total: 0,
-      has_more: false,
-      isLoading: false,
-      error: null,
-      mutate: () => {},
-    };
-  }
+  // ========== 所有 Hook 必须在顶层调用 ==========
 
-  const searchParams = new URLSearchParams();
-  if (params?.page_size) searchParams.set("page_size", String(params.page_size));
-  if (params?.page_token) searchParams.set("page_token", params.page_token);
-  if (params?.page_number) searchParams.set("page_number", String(params.page_number));
-  if (params?.filter) searchParams.set("filter", params.filter);
-  if (params?.sort) searchParams.set("sort", params.sort);
-  // 支持全局搜索参数
-  if (params?.search) searchParams.set("search", params.search);
-  // 支持高级搜索（精确匹配）
-  // 注意：URLSearchParams会自动编码，不需要手动encodeURIComponent
-  if (params?.advancedSearch?.field && params?.advancedSearch?.value) {
-    searchParams.set("search_mode", "exact");
-    searchParams.set("search_field", params.advancedSearch.field);
-    searchParams.set("search_value", params.advancedSearch.value);
-  }
-
-  // 使用计数器强制 SWR 在高级搜索时重新请求
+  // 高级搜索刷新计数器（强制 SWR 重新请求）
   const [refreshCounter, setRefreshCounter] = useState(0);
-  
-  // 当高级搜索变化时，触发刷新计数器
+
+  // URL 中的 k 参数（访问 token）—— 只在客户端读取，避免 SSR/CSR 不一致
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    const k = new URL(window.location.href).searchParams.get("k");
+    if (k) setAccessToken(k);
+  }, []);
+
+  // 高级搜索变化时触发刷新计数器
   useEffect(() => {
     if (params?.advancedSearch?.field && params?.advancedSearch?.value) {
       setRefreshCounter(c => c + 1);
     }
   }, [params?.advancedSearch?.field, params?.advancedSearch?.value]);
 
-  // 添加访问token参数（从URL获取k参数）
-  const accessToken = typeof window !== 'undefined' ? new URL(window.location.href).searchParams.get("k") : null;
-  if (accessToken) {
-    searchParams.set("k", accessToken);
+  // ========== 构建 URL ==========
+
+  let url: string | null = null;
+
+  if (storeId && tableName) {
+    const searchParams = new URLSearchParams();
+    if (params?.page_size) searchParams.set("page_size", String(params.page_size));
+    if (params?.page_token) searchParams.set("page_token", params.page_token);
+    if (params?.page_number) searchParams.set("page_number", String(params.page_number));
+    if (params?.filter) searchParams.set("filter", params.filter);
+    if (params?.sort) searchParams.set("sort", params.sort);
+    if (params?.search) searchParams.set("search", params.search);
+    if (params?.advancedSearch?.field && params?.advancedSearch?.value) {
+      searchParams.set("search_mode", "exact");
+      searchParams.set("search_field", params.advancedSearch.field);
+      searchParams.set("search_value", params.advancedSearch.value);
+    }
+    if (accessToken) {
+      searchParams.set("k", accessToken);
+    }
+    if (refreshCounter > 0) {
+      searchParams.set("_refresh", String(refreshCounter));
+    }
+    url = `/api/base/${storeId}/${tableName}${searchParams.toString() ? "?" + searchParams.toString() : ""}`;
   }
 
-  // 添加刷新计数器到 URL，确保高级搜索时不会使用缓存
-  if (refreshCounter > 0) {
-    searchParams.set("_refresh", String(refreshCounter));
-  }
-
-  const url = `/api/base/${storeId}/${tableName}${searchParams.toString() ? "?" + searchParams.toString() : ""}`;
-
+  // storeId 为空时 url = null，SWR 自动跳过请求（但 hook 仍然被调用，不违反规则）
   const { data, error, isLoading, mutate } = useSWR(url, fetcher, {
     revalidateOnFocus: false,
     dedupingInterval: 0, // 禁用 deduping，确保每次搜索都能发送新请求
