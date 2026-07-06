@@ -35,6 +35,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // 【诊断日志】确认当前操作的店铺和表
+    console.log("[sync-orders] ====== 同步订单启动 ======");
+    console.log("[sync-orders] storeId:", storeId);
+    console.log("[sync-orders] 店铺名称:", store.name);
+    console.log("[sync-orders] 订单表ID:", store.tables.order);
+    console.log("[sync-orders] 库存表ID:", store.tables.inventory);
+    console.log("[sync-orders] 平台:", platformId);
+    console.log("[sync-orders] ===============================");
+
     // 验证平台配置
     const platform = store.platforms?.find((p) => p.id === platformId);
     if (!platform) {

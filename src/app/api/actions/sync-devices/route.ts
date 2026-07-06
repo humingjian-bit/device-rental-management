@@ -25,6 +25,14 @@ export async function POST(
     return NextResponse.json({ error: "Store not found" }, { status: 404 });
   }
 
+  // 【诊断日志】确认当前操作的店铺和表
+  console.log("[sync-devices] ====== 同步库存启动 ======");
+  console.log("[sync-devices] storeId:", storeId);
+  console.log("[sync-devices] 店铺名称:", store.name);
+  console.log("[sync-devices] 设备表ID:", store.tables.device);
+  console.log("[sync-devices] 库存表ID:", store.tables.inventory);
+  console.log("[sync-devices] ===============================");
+
   const deviceTableId = store.tables.device;
   const inventoryTableId = store.tables.inventory;
 
