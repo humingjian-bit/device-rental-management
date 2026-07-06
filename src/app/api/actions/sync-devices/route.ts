@@ -115,7 +115,7 @@ export async function POST(
           SN编码: sn,
           设备型号: model || "",
           分类: category || "",
-          状态: [store.default_warehouse || "南通仓"],
+          状态: ["南通仓"],
         },
       }));
       await batchCreateBitableRecords(store.base_token, inventoryTableId, records);
