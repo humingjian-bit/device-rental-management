@@ -26,6 +26,7 @@ import {
   CheckCircle as CheckCircleIcon,
   Error as ErrorIcon,
 } from "@mui/icons-material";
+import { useSearchParams } from "next/navigation";
 import Script from "next/script";
 import { useCurrentStore, useStores } from "@/hooks/useStore";
 import {
@@ -57,6 +58,7 @@ function getRecordId(device: DeviceRecord, fallback: string | number): string {
 export default function PrintLabelPage() {
   const { storeId } = useCurrentStore();
   const { stores } = useStores();
+  const searchParams = useSearchParams();
 
   // 打印机状态
   const [printerStatus, setPrinterStatus] = useState<PrinterStatus>("connecting");
@@ -216,6 +218,22 @@ export default function PrintLabelPage() {
     };
     document.addEventListener("visibilitychange", handleVisibility);
     return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [loadPendingDevices]);
+
+  // 从设备页跳转过来时（?from=device）强制触发读取
+  useEffect(() => {
+    if (searchParams.get("from") === "device") {
+      console.log("[print-label] 检测到 from=device 参数，触发读取");
+      loadPendingDevices();
+    }
+  }, [searchParams, loadPendingDevices]);
+
+  // setTimeout 兜底：下一事件循环再读一次（处理各种时序问题）
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      loadPendingDevices();
+    }, 0);
+    return () => clearTimeout(timer);
   }, [loadPendingDevices]);
 
   const handleScriptReady = () => {
