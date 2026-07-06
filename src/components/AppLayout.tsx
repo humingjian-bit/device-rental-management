@@ -118,9 +118,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const { storeId, switchStore } = useCurrentStore();
   const { stores } = useStores();
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
+
+  // 避免 SSR hydration mismatch：只在客户端挂载后渲染依赖异步数据的条件内容
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const drawerWidth = collapsed ? COLLAPSED_WIDTH : DRAWER_WIDTH;
 
@@ -279,9 +285,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   label="当前店铺"
                   displayEmpty
                   renderValue={(value) => {
-                    if (!value) return <em style={{ color: "text.secondary" }}>请选择店铺</em>;
+                    if (!value) return "请选择店铺";
                     const s = stores.find((x: { id: string }) => x.id === value);
-                    return s ? s.name : value;
+                    return s ? s.name : String(value);
                   }}
                   onChange={(e) => switchStore(e.target.value)}
                 >
@@ -312,7 +318,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </AppBar>
           <Box sx={{ flexGrow: 1, p: 3, bgcolor: "#f5f5f5" }}>
             <Box sx={{ p: 3, bgcolor: "#fff", borderRadius: 2, minHeight: "calc(100vh - 120px)" }}>
-              {isAuthenticated && !authLoading && stores.length > 0 && !storeId ? (
+              {mounted && isAuthenticated && !authLoading && stores.length > 0 && !storeId ? (
                 <Box sx={{
                   display: "flex",
                   flexDirection: "column",
