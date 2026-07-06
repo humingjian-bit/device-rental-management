@@ -163,8 +163,8 @@ export default function PrintLabelPage() {
     };
   }, [initPrinter]);
 
-  // 已加载的设备数量（用于对比 localStorage 是否有新数据，避免重复 setState）
-  const loadedCountRef = useRef(0);
+  // 上次读取的 localStorage 时间戳（判断是否有新数据写入）
+  const lastLoadedTimestampRef = useRef(0);
 
   // 从设备管理页接收推送的设备
   const loadPendingDevices = useCallback(() => {
@@ -178,14 +178,16 @@ export default function PrintLabelPage() {
         localStorage.removeItem("pending_print_devices");
         return;
       }
-      if (devices.length > 0 && devices.length !== loadedCountRef.current) {
-        loadedCountRef.current = devices.length;
+      if (devices.length > 0) {
+        // 用 timestamp 判断是否是新数据，避免重复 setState 闪烁
+        if (data.timestamp === lastLoadedTimestampRef.current) return;
+        lastLoadedTimestampRef.current = data.timestamp;
         setFilteredDevices(devices);
         setAllDevices(devices);
         setSearched(true);
         setSelectedIds(new Set(devices.map((d, i) => getRecordId(d, i))));
         setPendingDevicesCount(devices.length);
-        console.log("[print-label] 从设备管理页接收", devices.length, "台设备");
+        console.log("[print-label] 从设备管理页接收", devices.length, "台设备, timestamp:", data.timestamp);
       }
     } catch (e) {
       console.error("解析推送设备数据失败:", e);
