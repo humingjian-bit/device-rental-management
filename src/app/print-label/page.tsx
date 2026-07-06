@@ -163,73 +163,72 @@ export default function PrintLabelPage() {
     };
   }, [initPrinter]);
 
-  // 上次读取的 localStorage 时间戳（判断是否有新数据写入）
-  const lastLoadedTimestampRef = useRef(0);
-
   // 从设备管理页接收推送的设备
-  const loadPendingDevices = useCallback(() => {
+  const loadPendingDevices = useCallback((source: string) => {
     try {
       const raw = localStorage.getItem("pending_print_devices");
-      if (!raw) return;
+      if (!raw) {
+        console.log("[print-label][" + source + "] localStorage 无数据");
+        return;
+      }
       const data = JSON.parse(raw);
       const devices: DeviceRecord[] = data.devices || [];
       // 超过1小时的数据视为过期，直接丢弃
       if (data.timestamp && Date.now() - data.timestamp > 3600000) {
         localStorage.removeItem("pending_print_devices");
+        console.log("[print-label][" + source + "] 数据已过期，已清除");
         return;
       }
       if (devices.length > 0) {
-        // 用 timestamp 判断是否是新数据，避免重复 setState 闪烁
-        if (data.timestamp === lastLoadedTimestampRef.current) return;
-        lastLoadedTimestampRef.current = data.timestamp;
         setFilteredDevices(devices);
         setAllDevices(devices);
         setSearched(true);
         setSelectedIds(new Set(devices.map((d, i) => getRecordId(d, i))));
         setPendingDevicesCount(devices.length);
-        console.log("[print-label] 从设备管理页接收", devices.length, "台设备, timestamp:", data.timestamp);
+        console.log("[print-label][" + source + "] 加载成功，共", devices.length, "台设备, timestamp:", data.timestamp);
+      } else {
+        console.log("[print-label][" + source + "] devices 为空数组");
       }
     } catch (e) {
-      console.error("解析推送设备数据失败:", e);
+      console.error("[print-label][" + source + "] 解析失败:", e);
       localStorage.removeItem("pending_print_devices");
     }
   }, []);
 
-  // 组件挂载时立即读取
+  // 1. 组件挂载时立即读取
   useEffect(() => {
-    loadPendingDevices();
+    loadPendingDevices("mount");
   }, [loadPendingDevices]);
 
-  // storeId 就绪后再兜底读一次（避免 AppLayout 条件渲染导致的时序问题）
+  // 2. storeId 就绪后再兜底读一次（避免 AppLayout 条件渲染导致的时序问题）
   useEffect(() => {
     if (storeId) {
-      loadPendingDevices();
+      loadPendingDevices("storeId-ready");
     }
   }, [storeId, loadPendingDevices]);
 
-  // 页面从后台切回前台时重新读取（应对 CSS 隐藏/显示场景）
+  // 3. 页面从后台切回前台时重新读取（应对 CSS 隐藏/显示场景）
   useEffect(() => {
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {
-        loadPendingDevices();
+        loadPendingDevices("visibilitychange");
       }
     };
     document.addEventListener("visibilitychange", handleVisibility);
     return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, [loadPendingDevices]);
 
-  // 从设备页跳转过来时（?from=device）强制触发读取
+  // 4. 从设备页跳转过来时（?from=device）强制触发读取
   useEffect(() => {
     if (typeof window !== "undefined" && window.location.search.includes("from=device")) {
-      console.log("[print-label] 检测到 from=device 参数，触发读取");
-      loadPendingDevices();
+      loadPendingDevices("from-device-param");
     }
   }, [loadPendingDevices]);
 
-  // setTimeout 兜底：下一事件循环再读一次（处理各种时序问题）
+  // 5. setTimeout 兜底：下一事件循环再读一次（处理各种时序问题）
   useEffect(() => {
     const timer = setTimeout(() => {
-      loadPendingDevices();
+      loadPendingDevices("setTimeout-0");
     }, 0);
     return () => clearTimeout(timer);
   }, [loadPendingDevices]);

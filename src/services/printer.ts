@@ -131,6 +131,7 @@ export async function printBatchLabels(
   let listener: ((msg: JobListenerMessage) => void) | null = null;
   let finished = false; // 防止重复触发 done
   let autoEndTimer: ReturnType<typeof setTimeout> | null = null;
+  let globalTimer: ReturnType<typeof setTimeout> | null = null;
 
   const finishJob = async (result?: PrinterResultAck, isError = false, errorMsg?: string) => {
     if (finished) return;
@@ -138,6 +139,10 @@ export async function printBatchLabels(
     if (autoEndTimer) {
       clearTimeout(autoEndTimer);
       autoEndTimer = null;
+    }
+    if (globalTimer) {
+      clearTimeout(globalTimer);
+      globalTimer = null;
     }
     if (listener) {
       removeJobListener(listener);
@@ -215,6 +220,13 @@ export async function printBatchLabels(
       if (listener) removeJobListener(listener);
       throw new Error('startJob 失败: errorCode=' + r.resultAck.errorCode);
     }
+    // 全局超时兜底：从 startJob 成功后开始计时，不管中间回调是否正常，超时强制结束
+    // 每页 5 秒 + 最少 15 秒保底
+    const globalTimeoutMs = Math.max(totalPages * 5000, 15000);
+    globalTimer = setTimeout(() => {
+      console.log(`[Printer] 全局超时 ${globalTimeoutMs}ms，强制结束任务`);
+      finishJob(undefined, true, '打印超时');
+    }, globalTimeoutMs);
   } catch (e) {
     if (listener) removeJobListener(listener);
     throw e;
