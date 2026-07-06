@@ -163,12 +163,11 @@ export default function PrintLabelPage() {
     };
   }, [initPrinter]);
 
-  // 是否已从 localStorage 读取过推送设备（防止重复处理）
-  const pendingLoadedRef = useRef(false);
+  // 已加载的设备数量（用于对比 localStorage 是否有新数据，避免重复 setState）
+  const loadedCountRef = useRef(0);
 
   // 从设备管理页接收推送的设备
   const loadPendingDevices = useCallback(() => {
-    if (pendingLoadedRef.current) return;
     try {
       const raw = localStorage.getItem("pending_print_devices");
       if (!raw) return;
@@ -179,8 +178,8 @@ export default function PrintLabelPage() {
         localStorage.removeItem("pending_print_devices");
         return;
       }
-      if (devices.length > 0) {
-        pendingLoadedRef.current = true;
+      if (devices.length > 0 && devices.length !== loadedCountRef.current) {
+        loadedCountRef.current = devices.length;
         setFilteredDevices(devices);
         setAllDevices(devices);
         setSearched(true);
@@ -205,6 +204,17 @@ export default function PrintLabelPage() {
       loadPendingDevices();
     }
   }, [storeId, loadPendingDevices]);
+
+  // 页面从后台切回前台时重新读取（应对 CSS 隐藏/显示场景）
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        loadPendingDevices();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [loadPendingDevices]);
 
   const handleScriptReady = () => {
     setSdkLoaded(true);

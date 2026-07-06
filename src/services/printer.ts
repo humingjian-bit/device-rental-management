@@ -129,11 +129,41 @@ export async function printBatchLabels(
 
   let currentPage = 0; // 已提交的页数（0-based index）
   let listener: ((msg: JobListenerMessage) => void) | null = null;
+  let finished = false; // 防止重复触发 done
+  let autoEndTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const finishJob = async (result?: PrinterResultAck, isError = false, errorMsg?: string) => {
+    if (finished) return;
+    finished = true;
+    if (autoEndTimer) {
+      clearTimeout(autoEndTimer);
+      autoEndTimer = null;
+    }
+    if (listener) {
+      removeJobListener(listener);
+      listener = null;
+    }
+    try {
+      if (!result) {
+        const end = await endJob();
+        result = end.resultAck;
+      }
+    } catch (e: any) {
+      console.warn('[Printer] endJob 失败:', e.message);
+    }
+    if (onProgress) {
+      if (isError) {
+        onProgress({ type: 'error', msg: errorMsg || '打印失败', totalPages });
+      } else {
+        onProgress({ type: 'done', result, totalPages });
+      }
+    }
+  };
 
   if (onProgress) {
     listener = async (msg: JobListenerMessage) => {
       const ack = msg?.resultAck;
-      if (!ack) return;
+      if (!ack || finished) return;
 
       // daemon 推送就绪信号 → 发送下一页数据
       if (msg.apiName === 'commitJob' && ack.info === 'commitJob ok!') {
@@ -149,6 +179,14 @@ export async function printBatchLabels(
             onProgress({ type: 'error', currentPage, totalPages, msg: e.message });
           }
         }
+        // 全部提交完成后启动超时兜底：每页 3 秒 + 最少 5 秒
+        if (currentPage >= totalPages && !autoEndTimer) {
+          const timeoutMs = Math.max(totalPages * 3000, 5000);
+          autoEndTimer = setTimeout(() => {
+            console.log(`[Printer] 全部 ${totalPages} 页已提交，超时 ${timeoutMs}ms 未收到完成回调，自动结束任务`);
+            finishJob();
+          }, timeoutMs);
+        }
         return;
       }
 
@@ -157,21 +195,15 @@ export async function printBatchLabels(
         onProgress({ type: 'progress', copies: ack.printCopies, pages: ack.printPages, totalPages });
       }
 
-      // 全部完成
+      // 全部完成（硬件回调确认）
       if (ack.printCopies === printQuantity && ack.printPages === totalPages) {
-        try {
-          const end = await endJob();
-          onProgress({ type: 'done', result: end.resultAck, totalPages });
-        } catch (e: any) {
-          onProgress({ type: 'error', msg: e.message, totalPages });
-        } finally {
-          if (listener) removeJobListener(listener);
-        }
+        finishJob(ack);
+        return;
       }
 
       // 错误（非 commitJob ok 的 errorCode != 0）
       if (ack.errorCode !== 0 && ack.info !== 'commitJob ok!') {
-        onProgress({ type: 'error', errorCode: ack.errorCode, msg: ack.info, totalPages });
+        finishJob(ack, true, ack.info || `错误码 ${ack.errorCode}`);
       }
     };
     addJobListener(listener);
@@ -180,6 +212,7 @@ export async function printBatchLabels(
   try {
     const r = await startJob(density, labelType, printMode, totalPages);
     if (r.resultAck.errorCode !== 0) {
+      if (listener) removeJobListener(listener);
       throw new Error('startJob 失败: errorCode=' + r.resultAck.errorCode);
     }
   } catch (e) {
