@@ -163,28 +163,48 @@ export default function PrintLabelPage() {
     };
   }, [initPrinter]);
 
+  // 是否已从 localStorage 读取过推送设备（防止重复处理）
+  const pendingLoadedRef = useRef(false);
+
   // 从设备管理页接收推送的设备
-  useEffect(() => {
+  const loadPendingDevices = useCallback(() => {
+    if (pendingLoadedRef.current) return;
     try {
       const raw = localStorage.getItem("pending_print_devices");
       if (!raw) return;
-      localStorage.removeItem("pending_print_devices");
       const data = JSON.parse(raw);
       const devices: DeviceRecord[] = data.devices || [];
       // 超过1小时的数据视为过期，直接丢弃
-      if (data.timestamp && Date.now() - data.timestamp > 3600000) return;
+      if (data.timestamp && Date.now() - data.timestamp > 3600000) {
+        localStorage.removeItem("pending_print_devices");
+        return;
+      }
       if (devices.length > 0) {
+        pendingLoadedRef.current = true;
         setFilteredDevices(devices);
         setAllDevices(devices);
         setSearched(true);
         setSelectedIds(new Set(devices.map((d, i) => getRecordId(d, i))));
         setPendingDevicesCount(devices.length);
+        console.log("[print-label] 从设备管理页接收", devices.length, "台设备");
       }
     } catch (e) {
       console.error("解析推送设备数据失败:", e);
       localStorage.removeItem("pending_print_devices");
     }
   }, []);
+
+  // 组件挂载时立即读取
+  useEffect(() => {
+    loadPendingDevices();
+  }, [loadPendingDevices]);
+
+  // storeId 就绪后再兜底读一次（避免 AppLayout 条件渲染导致的时序问题）
+  useEffect(() => {
+    if (storeId) {
+      loadPendingDevices();
+    }
+  }, [storeId, loadPendingDevices]);
 
   const handleScriptReady = () => {
     setSdkLoaded(true);
