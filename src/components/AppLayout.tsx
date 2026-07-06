@@ -318,7 +318,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </AppBar>
           <Box sx={{ flexGrow: 1, p: 3, bgcolor: "#f5f5f5" }}>
             <Box sx={{ p: 3, bgcolor: "#fff", borderRadius: 2, minHeight: "calc(100vh - 120px)" }}>
-              {mounted && isAuthenticated && !authLoading && stores.length > 0 && !storeId ? (
+              {/* 未选店铺提示 — 用条件渲染，提示层覆盖在内容上方 */}
+              {mounted && isAuthenticated && !authLoading && stores.length > 0 && !storeId && (
                 <Box sx={{
                   display: "flex",
                   flexDirection: "column",
@@ -331,9 +332,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   <Typography variant="h6" gutterBottom>请先选择店铺</Typography>
                   <Typography variant="body2">在右上角下拉框中选择一个店铺以查看数据</Typography>
                 </Box>
-              ) : (
-                children
               )}
+              {/* 页面内容 — 用 CSS 隐藏代替条件卸载，避免子组件被卸载重挂导致状态丢失 */}
+              <Box sx={{
+                display: (mounted && isAuthenticated && !authLoading && stores.length > 0 && !storeId) ? "none" : "block",
+              }}>
+                {children}
+              </Box>
             </Box>
           </Box>
         </Box>
