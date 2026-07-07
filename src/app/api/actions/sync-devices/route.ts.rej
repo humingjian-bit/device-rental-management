@@ -1,0 +1,11 @@
+--- src/app/api/actions/sync-devices/route.ts
++++ src/app/api/actions/sync-devices/route.ts
+@@ -82,7 +82,7 @@ export async function POST(
+     // 库存表有但设备表没有 → 删除
+     // 注意：inventoryMap 的迭代顺序不影响结果
+-    for (const [sn, recordId] of inventoryMap) {
++    inventoryMap.forEach((recordId, sn) => {
+       if (!deviceSNs.has(sn)) {
+         toDeleteIds.push(recordId);
+       }
+ 

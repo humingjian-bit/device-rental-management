@@ -163,17 +163,9 @@ export default function DevicePage() {
   // 推送选中设备到标签打印页
   const handlePrintSelected = useCallback(() => {
     if (selectedRows.length === 0) return;
-    const devices = selectedRows.map((row) => ({
-      _record_id: String(row._record_id || ""),
-      SN编码: row["SN编码"],
-      设备型号: row["设备型号"],
-    }));
-    localStorage.setItem("pending_print_devices", JSON.stringify({
-      timestamp: Date.now(),
-      devices,
-    }));
-    window.location.href = "/print-label?from=device";
-  }, [selectedRows]);
+    const ids = selectedRows.map((row) => String(row._record_id || "")).join(",");
+    router.push("/print-label?from=device&ids=" + encodeURIComponent(ids));
+  }, [selectedRows, router]);
 
   // 同步设备表与库存表
   const handleSyncDevices = useCallback(async () => {
