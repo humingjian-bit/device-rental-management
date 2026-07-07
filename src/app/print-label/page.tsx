@@ -198,7 +198,9 @@ export default function PrintLabelPage() {
   }, []);
 
   // URL参数数据加载标志（避免localStorage覆盖已加载的URL数据）
-  const urlDataLoadedRef = useRef(false);
+  // 如果URL有from=device参数，说明需要从URL加载，跳过localStorage
+  const hasUrlParams = typeof window !== 'undefined' && window.location.search.includes('from=device');
+  const urlDataLoadedRef = useRef(hasUrlParams);
 
   // 1. 组件挂载时立即读取
   useEffect(() => {
@@ -304,7 +306,10 @@ export default function PrintLabelPage() {
   useEffect(() => { filteredDevicesRef.current = filteredDevices; }, [filteredDevices]);
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (urlDataLoadedRef.current) return; // URL参数已加载数据，跳过localStorage
+      if (urlDataLoadedRef.current) {
+        console.log('[print-label][setTimeout-0] URL参数模式已设置标志，跳过localStorage');
+        return;
+      }
       if (storeId) loadPendingDevices("setTimeout-0");
     }, 0);
     return () => clearTimeout(timer);
