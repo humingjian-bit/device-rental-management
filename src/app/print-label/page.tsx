@@ -57,6 +57,8 @@ function getRecordId(device: DeviceRecord, fallback: string | number): string {
 export default function PrintLabelPage() {
   const { storeId } = useCurrentStore();
   const { stores } = useStores();
+  const currentStore = stores.find((s) => s.id === storeId);
+  const storeName = currentStore?.name || storeId;
 
   // 打印机状态
   const [printerStatus, setPrinterStatus] = useState<PrinterStatus>("connecting");
@@ -84,13 +86,8 @@ export default function PrintLabelPage() {
   // 从设备管理页推送的设备
   const [pendingDevicesCount, setPendingDevicesCount] = useState(0);
 
-  const initInProgress = useRef(false);
-  const storeIdRef = useRef(storeId);
-  useEffect(() => { storeIdRef.current = storeId; }, [storeId]);
 
-  // 获取当前店铺名
-  const currentStore = stores.find((s) => s.id === storeId);
-  const storeName = currentStore?.name || storeId;
+  const initInProgress = useRef(false);
 
   // ============ 初始化打印机 ============
   const initPrinter = useCallback(async () => {
@@ -142,6 +139,52 @@ export default function PrintLabelPage() {
     }
   }, []);
 
+  // ============ 设备加载（单一入口）============
+  // 从设备管理页跳转过来时，通过URL参数获取设备ID列表
+  const deviceLoadInProgress = useRef(false);
+  useEffect(() => {
+    // 只有从设备页跳转过来（URL有from=device参数）才处理
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has("from=device")) return;
+
+    const idsParam = params.get("ids");
+    if (!idsParam) return;
+    const ids = idsParam.split(",").filter(Boolean);
+    if (ids.length === 0) return;
+
+    // 等待storeId就绪
+    if (!storeId) return;
+
+    // 防止重复加载
+    if (deviceLoadInProgress.current) return;
+    deviceLoadInProgress.current = true;
+
+    console.log("[print-label] 从URL加载设备, ids=", ids, "storeId=", storeId);
+    setLoading(true);
+
+    fetch("/api/base/" + storeId + "/batch-records?table=device&ids=" + ids.map(id => encodeURIComponent(id)).join(","))
+      .then(r => r.json())
+      .then(data => {
+        const items: DeviceRecord[] = data.items || [];
+        console.log("[print-label] 批量获取设备返回", items.length, "条");
+        if (items.length > 0) {
+          setAllDevices(items);
+          setFilteredDevices(items);
+          setSearched(true);
+          setSelectedIds(new Set(items.map((d, i) => getRecordId(d, i))));
+          setPendingDevicesCount(items.length);
+        }
+      })
+      .catch(e => {
+        console.error("[print-label] 批量获取设备失败:", e);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [storeId]);
+
+  // SDK脚本加载完成后初始化打印机
   useEffect(() => {
     initInProgress.current = false;
     setSdkLoaded(false);
@@ -165,157 +208,8 @@ export default function PrintLabelPage() {
     };
   }, [initPrinter]);
 
-  // 从设备管理页接收推送的设备
-  const loadPendingDevices = useCallback((source: string) => {
-    try {
-      const raw = localStorage.getItem("pending_print_devices");
-      if (!raw) {
-        console.log("[print-label][" + source + "] localStorage 无数据");
-        return;
-      }
-      const data = JSON.parse(raw);
-      const devices: DeviceRecord[] = data.devices || [];
-      // 超过1小时的数据视为过期，直接丢弃
-      if (data.timestamp && Date.now() - data.timestamp > 3600000) {
-        localStorage.removeItem("pending_print_devices");
-        console.log("[print-label][" + source + "] 数据已过期，已清除");
-        return;
-      }
-      if (devices.length > 0) {
-        setFilteredDevices(devices);
-        setAllDevices(devices);
-        setSearched(true);
-        setSelectedIds(new Set(devices.map((d, i) => getRecordId(d, i))));
-        setPendingDevicesCount(devices.length);
-        console.log("[print-label][" + source + "] 加载成功，共", devices.length, "台设备, timestamp:", data.timestamp);
-      } else {
-        console.log("[print-label][" + source + "] devices 为空数组");
-      }
-    } catch (e) {
-      console.error("[print-label][" + source + "] 解析失败:", e);
-      localStorage.removeItem("pending_print_devices");
-    }
-  }, []);
-
-  // URL参数数据加载标志（避免localStorage覆盖已加载的URL数据）
-  // 如果URL有from=device参数，说明需要从URL加载，跳过localStorage
-  const hasUrlParams = typeof window !== 'undefined' && window.location.search.includes('from=device');
-  const urlDataLoadedRef = useRef(hasUrlParams);
-
-  // 1. 组件挂载时立即读取
-  useEffect(() => {
-    loadPendingDevices("mount");
-  }, [loadPendingDevices, storeId]);
-
-  // 2. storeId 就绪后再兜底读一次（避免 AppLayout 条件渲染导致的时序问题）
-  useEffect(() => {
-    if (storeId) {
-      loadPendingDevices("storeId-ready");
-    }
-  }, [storeId, loadPendingDevices]);
-
-  // 3. 页面从后台切回前台时重新读取（应对 CSS 隐藏/显示场景）
-  useEffect(() => {
-    const handleVisibility = () => {
-      if (document.visibilityState === "visible") {
-        loadPendingDevices("visibilitychange");
-      }
-    };
-    document.addEventListener("visibilitychange", handleVisibility);
-    return () => document.removeEventListener("visibilitychange", handleVisibility);
-  }, [loadPendingDevices]);
-
-  const fetchDevicesByIds = useCallback(async (ids: string[]) => {
-    console.log('[print-label][fetchDevicesByIds] called with ids=', ids, 'storeId=', storeId);
-    const currentStoreId = storeIdRef.current;
-    if (!currentStoreId || ids.length === 0) return;
-    setLoading(true);
-    try {
-      const res = await fetch("/api/base/" + currentStoreId + "/batch-records?table=device&ids=" + ids.map((id) => encodeURIComponent(id)).join(","));
-      const data = await res.json();
-      const items: DeviceRecord[] = data.items || [];
-      if (items.length > 0) {
-        setAllDevices(items);
-        setFilteredDevices(items);
-        setSearched(true);
-        setSelectedIds(new Set(items.map((d, i) => getRecordId(d, i))));
-        setPendingDevicesCount(items.length);
-        console.log("[print-label][url-ids] 加载成功，共", items.length, "台设备");
-      } else {
-        console.log("[print-label][url-ids] 无数据，后端返回:", JSON.stringify(data));
-      }
-    } catch (e) {
-      console.error("[print-label][url-ids] 加载失败:", e);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  // 4. 从设备页跳转过来时（?from=device&ids=xxx）强制从 URL 参数加载设备
-  useEffect(() => {
-    console.log("[print-label][useEffect4] running, search=", window.location.search, "storeId=", storeId);
-    if (typeof window === "undefined" || !window.location.search.includes("from=device")) {
-      console.log("[print-label][useEffect4] no from=device in URL");
-      return;
-    }
-    const params = new URLSearchParams(window.location.search);
-    const idsParam = params.get("ids");
-    console.log("[print-label][useEffect4] idsParam=", idsParam);
-    if (!idsParam) {
-      loadPendingDevices("from-device-param");
-      return;
-    }
-    const ids = idsParam.split(",").filter(Boolean);
-    console.log("[print-label][useEffect4] parsed ids=", ids, "count=", ids.length);
-    if (ids.length === 0) return;
-
-    const currentStoreId = storeId;
-    if (!currentStoreId) {
-      console.log("[print-label][useEffect4] storeId still empty, waiting...");
-      return;
-    }
-
-    // 直接内联 fetch 逻辑
-    setLoading(true);
-    fetch("/api/base/" + currentStoreId + "/batch-records?table=device&ids=" + ids.map((id) => encodeURIComponent(id)).join(","))
-      .then((r) => r.json())
-      .then((data) => {
-        const items: DeviceRecord[] = data.items || [];
-        console.log("[print-label][useEffect4] fetch returned", items.length, "items");
-        if (items.length > 0) {
-          setAllDevices(items);
-          setFilteredDevices(items);
-          setSearched(true);
-          setSelectedIds(new Set(items.map((d, i) => getRecordId(d, i))));
-          setPendingDevicesCount(items.length);
-          urlDataLoadedRef.current = true;
-        }
-      })
-      .catch((e) => {
-        console.error("[print-label][useEffect4] fetch failed:", e);
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-  }, [storeId, loadPendingDevices]);
-
-
-  
-  // 5. setTimeout 兜底：只有当前无数据显示时才读localStorage（避免覆盖URL参数已加载的数据）
-  const filteredDevicesRef = useRef(filteredDevices);
-  useEffect(() => { filteredDevicesRef.current = filteredDevices; }, [filteredDevices]);
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (urlDataLoadedRef.current) {
-        console.log('[print-label][setTimeout-0] URL参数模式已设置标志，跳过localStorage');
-        return;
-      }
-      if (storeId) loadPendingDevices("setTimeout-0");
-    }, 0);
-    return () => clearTimeout(timer);
-  }, [loadPendingDevices, storeId]);
-
   const handleScriptReady = () => {
+
     setSdkLoaded(true);
     if (!initInProgress.current) {
       initPrinter();
