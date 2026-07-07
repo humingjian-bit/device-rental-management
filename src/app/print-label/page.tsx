@@ -219,6 +219,7 @@ export default function PrintLabelPage() {
   }, [loadPendingDevices]);
 
   const fetchDevicesByIds = useCallback(async (ids: string[]) => {
+    console.log('[print-label][fetchDevicesByIds] called with ids=', ids, 'storeId=', storeId);
     if (!storeId || ids.length === 0) return;
     setLoading(true);
     try {
@@ -244,19 +245,24 @@ export default function PrintLabelPage() {
 
   // 4. 从设备页跳转过来时（?from=device&ids=xxx）强制从 URL 参数加载设备
   useEffect(() => {
+    console.log("[print-label][useEffect4] running, search=", window.location.search, "storeId=", storeId);
     if (typeof window !== "undefined" && window.location.search.includes("from=device")) {
       const params = new URLSearchParams(window.location.search);
       const idsParam = params.get("ids");
+      console.log("[print-label][useEffect4] idsParam=", idsParam);
       if (idsParam) {
         const ids = idsParam.split(",").filter(Boolean);
+        console.log("[print-label][useEffect4] parsed ids=", ids, "count=", ids.length);
         if (ids.length > 0) {
           fetchDevicesByIds(ids);
           return;
         }
       }
       loadPendingDevices("from-device-param");
+    } else {
+      console.log("[print-label][useEffect4] no from=device in URL");
     }
-  }, [loadPendingDevices, fetchDevicesByIds]);
+  }, [loadPendingDevices, fetchDevicesByIds, storeId]);
 
 
   
