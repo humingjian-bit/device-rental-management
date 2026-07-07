@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getBitableRecord } from "@/lib/feishu";
-import { getStore } from "@/lib/store";
+import { getStoreConfig } from "@/lib/config";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -18,7 +18,10 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const store = getStore(storeId);
+    const store = getStoreConfig(storeId);
+    if (!store) {
+      return NextResponse.json({ error: "Store not found" }, { status: 404 });
+    }
     const tableId = store.tables[tableName as keyof typeof store.tables];
     if (!tableId) {
       return NextResponse.json({ error: "Unknown table" }, { status: 400 });
