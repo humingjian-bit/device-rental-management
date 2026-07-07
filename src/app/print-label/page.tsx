@@ -143,24 +143,26 @@ export default function PrintLabelPage() {
   // 从设备管理页跳转过来时，通过URL参数获取设备ID列表
   useEffect(() => {
     console.log("[print-label][load] useEffect触发, storeId=", storeId);
-    // 只有从设备页跳转过来（URL有from=device参数）才处理
-    if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
-    if (!params.has("from=device")) {
-      console.log("[print-label][load] URL无from=device，跳过");
-      return;
-    }
+    // 直接从 window.location.href 解析参数（避免 Next.js hydration 时 searchParams 不一致问题）
+    const href = window.location.href;
+    const fromMatch = href.match(/[?&]from=device/);
+    const idsMatch = href.match(/[?&]ids=([^&]+)/);
+    const fromDevice = fromMatch ? "device" : null;
+    const idsParam = idsMatch ? decodeURIComponent(idsMatch[1]) : null;
 
-    const idsParam = params.get("ids");
-    if (!idsParam) return;
-    const ids = idsParam.split(",").filter(Boolean);
-    if (ids.length === 0) return;
+    console.log("[print-label][load] href=" + href + ", fromDevice=" + fromDevice + ", idsParam=" + idsParam);
+
+    // 不是从设备页跳转过来的，跳过
+    if (!fromDevice) return;
 
     // 等待storeId就绪
     if (!storeId) {
       console.log("[print-label][load] storeId为空，等待...");
       return;
     }
+
+    const ids = idsParam ? idsParam.split(",").filter(Boolean) : [];
+    if (ids.length === 0) return;
 
     console.log("[print-label] 从URL加载设备, ids=", ids, "storeId=", storeId);
     setLoading(true);
