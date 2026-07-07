@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getBitableRecord } from "@/lib/feishu";
 import { getStoreConfig } from "@/lib/config";
 
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest, { params }: { params: { store: string } }) {
   const { searchParams } = new URL(request.url);
-  const storeId = searchParams.get("store");
+  const storeId = params.store;
   const tableName = searchParams.get("table") || "device";
   const idsParam = searchParams.get("ids") || "";
 
