@@ -143,6 +143,7 @@ export default function PrintLabelPage() {
   // 从设备管理页跳转过来时，通过URL参数获取设备ID列表
   const deviceLoadInProgress = useRef(false);
   useEffect(() => {
+    console.log("[print-label][mount] 组件挂载, href=" + window.location.href);
     // 只有从设备页跳转过来（URL有from=device参数）才处理
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
