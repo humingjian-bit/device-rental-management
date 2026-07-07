@@ -295,13 +295,17 @@ export default function PrintLabelPage() {
 
 
   
-  // 5. setTimeout 兜底：下一事件循环再读一次（处理各种时序问题）
+  // 5. setTimeout 兜底：只有当前无数据显示时才读localStorage（避免覆盖URL参数已加载的数据）
+  const filteredDevicesRef = useRef(filteredDevices);
+  useEffect(() => { filteredDevicesRef.current = filteredDevices; }, [filteredDevices]);
   useEffect(() => {
     const timer = setTimeout(() => {
-      loadPendingDevices("setTimeout-0");
+      if (filteredDevicesRef.current.length === 0 && storeId) {
+        loadPendingDevices("setTimeout-0");
+      }
     }, 0);
     return () => clearTimeout(timer);
-  }, [loadPendingDevices]);
+  }, [loadPendingDevices, storeId]);
 
   const handleScriptReady = () => {
     setSdkLoaded(true);
