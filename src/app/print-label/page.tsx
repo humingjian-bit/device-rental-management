@@ -249,23 +249,49 @@ export default function PrintLabelPage() {
   // 4. 从设备页跳转过来时（?from=device&ids=xxx）强制从 URL 参数加载设备
   useEffect(() => {
     console.log("[print-label][useEffect4] running, search=", window.location.search, "storeId=", storeId);
-    if (typeof window !== "undefined" && window.location.search.includes("from=device")) {
-      const params = new URLSearchParams(window.location.search);
-      const idsParam = params.get("ids");
-      console.log("[print-label][useEffect4] idsParam=", idsParam);
-      if (idsParam) {
-        const ids = idsParam.split(",").filter(Boolean);
-        console.log("[print-label][useEffect4] parsed ids=", ids, "count=", ids.length);
-        if (ids.length > 0) {
-          fetchDevicesByIds(ids);
-          return;
-        }
-      }
-      loadPendingDevices("from-device-param");
-    } else {
+    if (typeof window === "undefined" || !window.location.search.includes("from=device")) {
       console.log("[print-label][useEffect4] no from=device in URL");
+      return;
     }
-  }, [loadPendingDevices, fetchDevicesByIds, storeId]);
+    const params = new URLSearchParams(window.location.search);
+    const idsParam = params.get("ids");
+    console.log("[print-label][useEffect4] idsParam=", idsParam);
+    if (!idsParam) {
+      loadPendingDevices("from-device-param");
+      return;
+    }
+    const ids = idsParam.split(",").filter(Boolean);
+    console.log("[print-label][useEffect4] parsed ids=", ids, "count=", ids.length);
+    if (ids.length === 0) return;
+
+    const currentStoreId = storeId;
+    if (!currentStoreId) {
+      console.log("[print-label][useEffect4] storeId still empty, waiting...");
+      return;
+    }
+
+    // 直接内联 fetch 逻辑
+    setLoading(true);
+    fetch("/api/base/" + currentStoreId + "/batch-records?table=device&ids=" + ids.map((id) => encodeURIComponent(id)).join(","))
+      .then((r) => r.json())
+      .then((data) => {
+        const items: DeviceRecord[] = data.items || [];
+        console.log("[print-label][useEffect4] fetch returned", items.length, "items");
+        if (items.length > 0) {
+          setAllDevices(items);
+          setFilteredDevices(items);
+          setSearched(true);
+          setSelectedIds(new Set(items.map((d, i) => getRecordId(d, i))));
+          setPendingDevicesCount(items.length);
+        }
+      })
+      .catch((e) => {
+        console.error("[print-label][useEffect4] fetch failed:", e);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [storeId, loadPendingDevices]);
 
 
   
