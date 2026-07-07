@@ -218,6 +218,30 @@ export default function PrintLabelPage() {
     return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, [loadPendingDevices]);
 
+  const fetchDevicesByIds = useCallback(async (ids: string[]) => {
+    if (!storeId || ids.length === 0) return;
+    setLoading(true);
+    try {
+      const res = await fetch("/api/base/" + storeId + "/batch-records?table=device&ids=" + ids.map((id) => encodeURIComponent(id)).join(","));
+      const data = await res.json();
+      const items: DeviceRecord[] = data.items || [];
+      if (items.length > 0) {
+        setAllDevices(items);
+        setFilteredDevices(items);
+        setSearched(true);
+        setSelectedIds(new Set(items.map((d, i) => getRecordId(d, i))));
+        setPendingDevicesCount(items.length);
+        console.log("[print-label][url-ids] 加载成功，共", items.length, "台设备");
+      } else {
+        console.log("[print-label][url-ids] 无数据，后端返回:", JSON.stringify(data));
+      }
+    } catch (e) {
+      console.error("[print-label][url-ids] 加载失败:", e);
+    } finally {
+      setLoading(false);
+    }
+  }, [storeId]);
+
   // 4. 从设备页跳转过来时（?from=device&ids=xxx）强制从 URL 参数加载设备
   useEffect(() => {
     if (typeof window !== "undefined" && window.location.search.includes("from=device")) {
@@ -235,32 +259,8 @@ export default function PrintLabelPage() {
   }, [loadPendingDevices, fetchDevicesByIds]);
 
 
-  const fetchDevicesByIds = useCallback(async (ids: string[]) => {
-    if (!storeId || ids.length === 0) return;
-    setLoading(true);
-    try {
-      const results = await Promise.all(
-        ids.map((id) =>
-          fetch("/api/base/" + storeId + "/device?search_mode=exact&search_field=_record_id&search_value=" + encodeURIComponent(id)).then((r) => r.json())
-        )
-      );
-      const items = results.flatMap((r) => (r.items || []));
-      if (items.length > 0) {
-        setAllDevices(items);
-        setFilteredDevices(items);
-        setSearched(true);
-        setSelectedIds(new Set(items.map((d, i) => getRecordId(d, i))));
-        setPendingDevicesCount(items.length);
-        console.log("[print-label][url-ids] 加载成功，共", items.length, "台设备");
-      }
-    } catch (e) {
-      console.error("[print-label][url-ids] 加载失败:", e);
-    } finally {
-      setLoading(false);
-    }
-  }, [storeId]);
-
-    // 5. setTimeout 兜底：下一事件循环再读一次（处理各种时序问题）
+  
+  // 5. setTimeout 兜底：下一事件循环再读一次（处理各种时序问题）
   useEffect(() => {
     const timer = setTimeout(() => {
       loadPendingDevices("setTimeout-0");
