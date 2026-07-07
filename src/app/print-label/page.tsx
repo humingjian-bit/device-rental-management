@@ -197,6 +197,9 @@ export default function PrintLabelPage() {
     }
   }, []);
 
+  // URL参数数据加载标志（避免localStorage覆盖已加载的URL数据）
+  const urlDataLoadedRef = useRef(false);
+
   // 1. 组件挂载时立即读取
   useEffect(() => {
     loadPendingDevices("mount");
@@ -283,6 +286,7 @@ export default function PrintLabelPage() {
           setSearched(true);
           setSelectedIds(new Set(items.map((d, i) => getRecordId(d, i))));
           setPendingDevicesCount(items.length);
+          urlDataLoadedRef.current = true;
         }
       })
       .catch((e) => {
@@ -300,9 +304,8 @@ export default function PrintLabelPage() {
   useEffect(() => { filteredDevicesRef.current = filteredDevices; }, [filteredDevices]);
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (filteredDevicesRef.current.length === 0 && storeId) {
-        loadPendingDevices("setTimeout-0");
-      }
+      if (urlDataLoadedRef.current) return; // URL参数已加载数据，跳过localStorage
+      if (storeId) loadPendingDevices("setTimeout-0");
     }, 0);
     return () => clearTimeout(timer);
   }, [loadPendingDevices, storeId]);
