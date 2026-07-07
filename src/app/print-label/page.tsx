@@ -141,13 +141,15 @@ export default function PrintLabelPage() {
 
   // ============ 设备加载（单一入口）============
   // 从设备管理页跳转过来时，通过URL参数获取设备ID列表
-  const deviceLoadInProgress = useRef(false);
   useEffect(() => {
-    console.log("[print-label][mount] 组件挂载, href=" + window.location.href);
+    console.log("[print-label][load] useEffect触发, storeId=", storeId);
     // 只有从设备页跳转过来（URL有from=device参数）才处理
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
-    if (!params.has("from=device")) return;
+    if (!params.has("from=device")) {
+      console.log("[print-label][load] URL无from=device，跳过");
+      return;
+    }
 
     const idsParam = params.get("ids");
     if (!idsParam) return;
@@ -155,11 +157,10 @@ export default function PrintLabelPage() {
     if (ids.length === 0) return;
 
     // 等待storeId就绪
-    if (!storeId) return;
-
-    // 防止重复加载
-    if (deviceLoadInProgress.current) return;
-    deviceLoadInProgress.current = true;
+    if (!storeId) {
+      console.log("[print-label][load] storeId为空，等待...");
+      return;
+    }
 
     console.log("[print-label] 从URL加载设备, ids=", ids, "storeId=", storeId);
     setLoading(true);
