@@ -137,9 +137,9 @@ export class HuizuParser {
     const estimatedReturnDate = this.calcEstimatedReturn(endDate);
     const actualShipDate = this.calcActualShipDate(startDate);
 
-    // 商品名称清洗
+    // 商品名称（飞书租机型号字段已改为字符串类型，直接传原值不做映射）
     const productName = String(row["商品名称"] || "").trim();
-    const deviceModel = this.extractDeviceModel(productName);
+    const deviceModel = productName;
 
     // 规格→套餐
     const spec = String(row["规格"] || "").trim();
