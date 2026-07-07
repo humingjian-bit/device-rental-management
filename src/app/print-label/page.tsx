@@ -85,6 +85,8 @@ export default function PrintLabelPage() {
   const [pendingDevicesCount, setPendingDevicesCount] = useState(0);
 
   const initInProgress = useRef(false);
+  const storeIdRef = useRef(storeId);
+  useEffect(() => { storeIdRef.current = storeId; }, [storeId]);
 
   // 获取当前店铺名
   const currentStore = stores.find((s) => s.id === storeId);
@@ -220,10 +222,11 @@ export default function PrintLabelPage() {
 
   const fetchDevicesByIds = useCallback(async (ids: string[]) => {
     console.log('[print-label][fetchDevicesByIds] called with ids=', ids, 'storeId=', storeId);
-    if (!storeId || ids.length === 0) return;
+    const currentStoreId = storeIdRef.current;
+    if (!currentStoreId || ids.length === 0) return;
     setLoading(true);
     try {
-      const res = await fetch("/api/base/" + storeId + "/batch-records?table=device&ids=" + ids.map((id) => encodeURIComponent(id)).join(","));
+      const res = await fetch("/api/base/" + currentStoreId + "/batch-records?table=device&ids=" + ids.map((id) => encodeURIComponent(id)).join(","));
       const data = await res.json();
       const items: DeviceRecord[] = data.items || [];
       if (items.length > 0) {
@@ -241,7 +244,7 @@ export default function PrintLabelPage() {
     } finally {
       setLoading(false);
     }
-  }, [storeId]);
+  }, []);
 
   // 4. 从设备页跳转过来时（?from=device&ids=xxx）强制从 URL 参数加载设备
   useEffect(() => {
