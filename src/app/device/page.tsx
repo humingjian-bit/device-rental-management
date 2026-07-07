@@ -164,6 +164,7 @@ export default function DevicePage() {
   const handlePrintSelected = useCallback(() => {
     if (selectedRows.length === 0) return;
     const ids = selectedRows.map((row) => String(row._record_id || "")).join(",");
+    console.log("[device] handlePrintSelected: selectedRows.length=" + selectedRows.length + ", ids=" + ids + ", first row _record_id=" + (selectedRows[0] ? selectedRows[0]._record_id : "undefined"));
     window.location.href = "/print-label?from=device&ids=" + encodeURIComponent(ids);
   }, [selectedRows, router]);
 
