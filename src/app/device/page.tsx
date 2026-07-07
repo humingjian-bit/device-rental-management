@@ -164,7 +164,7 @@ export default function DevicePage() {
   const handlePrintSelected = useCallback(() => {
     if (selectedRows.length === 0) return;
     const ids = selectedRows.map((row) => String(row._record_id || "")).join(",");
-    router.push("/print-label?from=device&ids=" + encodeURIComponent(ids));
+    window.location.href = "/print-label?from=device&ids=" + encodeURIComponent(ids);
   }, [selectedRows, router]);
 
   // 同步设备表与库存表
