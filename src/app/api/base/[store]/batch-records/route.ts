@@ -17,12 +17,16 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ items: [] });
   }
 
+  console.log("[batch-records] storeId=" + storeId + ", tableName=" + tableName + ", ids=" + JSON.stringify(ids));
+
   try {
     const store = getStoreConfig(storeId);
+    console.log("[batch-records] store config:", store ? "found, deviceTableId=" + store.tables.device : "NULL");
     if (!store) {
       return NextResponse.json({ error: "Store not found" }, { status: 404 });
     }
     const tableId = store.tables[tableName as keyof typeof store.tables];
+    console.log("[batch-records] tableId=" + tableId + " for tableName=" + tableName);
     if (!tableId) {
       return NextResponse.json({ error: "Unknown table" }, { status: 400 });
     }
